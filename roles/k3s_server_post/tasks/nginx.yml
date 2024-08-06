@@ -1,0 +1,65 @@
+---
+- name: Create manifests directory for temp configuration
+  file:
+    path: /tmp/k3s
+    state: directory
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Ensure ingress-nginx namespace exists
+  command: >
+    k3s kubectl create namespace ingress-nginx
+  args:
+    creates: /tmp/k3s/ingress-nginx-created
+  register: create_namespace_result_nginx
+  failed_when: create_namespace_result_nginx.rc != 0 and "already exists" not in create_namespace_result_nginx.stderr
+  changed_when: create_namespace_result_nginx.rc == 0
+  run_once: true
+
+- name: Create ingress resource for apps
+  template:
+    src: "nginx-deployment-template.yaml.j2"
+    dest: "/tmp/k3s/nginx-deployment.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy NGINX Ingress Controller
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/nginx-deployment.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Wait for NGINX Ingress Controller deployment
+  command: >-
+    k3s kubectl wait --namespace ingress-nginx --for=condition=Available deployment/ingress-nginx-controller --timeout=120s
+  changed_when: false
+  run_once: true
+
+- name: Wait for ingress-nginx-controller-admission service endpoints
+  command: >-
+    k3s kubectl get endpoints ingress-nginx-controller-admission --namespace ingress-nginx
+  register: admission_endpoints
+  retries: 10
+  delay: 6
+  until: admission_endpoints.stdout | length > 0
+  changed_when: false
+  run_once: true
+
+- name: Create ingress resource for apps
+  template:
+    src: "nginx-ingress-template.yaml.j2"
+    dest: "/tmp/k3s/nginx-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply ingress resource
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/nginx-ingress.yaml
+  changed_when: false
+  run_once: true

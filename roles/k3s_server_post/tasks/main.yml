@@ -9,10 +9,19 @@
   tags: cilium
   when: cilium_iface is defined
 
+- name: Pause for 10 seconds
+  pause:
+    seconds: 10
+  delegate_to: localhost
+
 - name: Deploy metallb pool
   include_tasks: metallb.yml
   tags: metallb
   when: kube_vip_lb_ip_range is not defined and (not cilium_bgp or cilium_iface is not defined)
+
+- name: Deploy nginx ingress controller
+  include_tasks: nginx.yml
+  tags: nginx
 
 - name: Remove tmp directory used for manifests
   file:
