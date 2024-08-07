@@ -110,7 +110,7 @@
     mode: 0755
   run_once: true
 
-- name: Deploy traefik Ingress Controller whomai
+- name: Deploy traefik Ingress Controller whoami
   command: >-
     k3s kubectl apply -f /tmp/k3s/03-whoami.yaml
   register: this
@@ -127,9 +127,9 @@
     mode: 0755
   run_once: true
 
-- name: Deploy traefik Ingress Controller whomai services
+- name: Deploy traefik Ingress Controller whoami services
   command: >-
-    k3s kubectl apply -f /tmp/k3s/03-whomai-services.yaml
+    k3s kubectl apply -f /tmp/k3s/03-whoami-services.yaml
   register: this
   changed_when: false
   run_once: true
@@ -144,9 +144,9 @@
     mode: 0755
   run_once: true
 
-- name: Deploy traefik Ingress Controller whomai ingress
+- name: Deploy traefik Ingress Controller whoami ingress
   command: >-
-    k3s kubectl apply -f /tmp/k3s/04-whomai-ingress.yaml
+    k3s kubectl apply -f /tmp/k3s/04-whoami-ingress.yaml
   register: this
   changed_when: false
   run_once: true
