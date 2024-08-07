@@ -1,0 +1,168 @@
+---
+- name: Create manifests directory for temp configuration
+  file:
+    path: /tmp/k3s
+    state: directory
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Ensure ingress-traefik namespace exists
+  command: >
+    k3s kubectl create namespace ingress-traefik
+  args:
+    creates: /tmp/k3s/ingress-traefik-created
+  register: create_namespace_result_traefik
+  failed_when: create_namespace_result_traefik.rc != 0 and "already exists" not in create_namespace_result_traefik.stderr
+  changed_when: create_namespace_result_traefik.rc == 0
+  run_once: true
+
+- name: Create ingress resource for roles
+  template:
+    src: "traefik-deployment-template-role.yaml.j2"
+    dest: "/tmp/k3s/00-role.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller role
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/00-role.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for account
+  template:
+    src: "traefik-deployment-template-account.yaml.j2"
+    dest: "/tmp/k3s/00-account.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller account
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/00-account.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for binding
+  template:
+    src: "traefik-deployment-template-binding.yaml.j2"
+    dest: "/tmp/k3s/00-role-binding.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller binding
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/00-role-binding.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for traefik
+  template:
+    src: "traefik-deployment-template-traefik.yaml.j2"
+    dest: "/tmp/k3s/02-traefik.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller traefik
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/02-traefik.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for traefik services
+  template:
+    src: "traefik-deployment-template-traefik-services.yaml.j2"
+    dest: "/tmp/k3s/02-traefik-services.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller traefik services
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/02-traefik-services.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for whoami
+  template:
+    src: "traefik-deployment-template-whoami.yaml.j2"
+    dest: "/tmp/k3s/03-whoami.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller whomai
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/03-whomai.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for whoami services
+  template:
+    src: "traefik-deployment-template-whoami-services.yaml.j2"
+    dest: "/tmp/k3s/03-whoami-services.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller whomai services
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/03-whomai-services.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for whoami ingress
+  template:
+    src: "traefik-deployment-template-whoami-ingress.yaml.j2"
+    dest: "/tmp/k3s/04-whoami-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy traefik Ingress Controller whomai ingress
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/04-whomai-ingress.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create ingress resource for apps
+  template:
+    src: "nginx-ingress-template.yaml.j2"
+    dest: "/tmp/k3s/nginx-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply ingress resource
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/nginx-ingress.yaml
+  changed_when: false
+  run_once: true
