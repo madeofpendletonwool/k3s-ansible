@@ -1,0 +1,28 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+ name: traefik-daemonset
+ namespace: ingress-traefik
+ labels:
+   app: traefik
+spec:
+ selector:
+   matchLabels:
+     app: traefik
+ template:
+   metadata:
+     labels:
+       app: traefik
+   spec:
+     serviceAccountName: traefik-account
+     containers:
+       - name: traefik
+         image: traefik:v3.1
+         args:
+           - --api.insecure
+           - --providers.kubernetesingress
+         ports:
+           - name: web
+             containerPort: 80
+           - name: dashboard
+             containerPort: 8080

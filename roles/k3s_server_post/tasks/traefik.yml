@@ -70,7 +70,7 @@
 
 - name: Create ingress resource for traefik
   template:
-    src: "traefik-deployment-template-traefik.yaml.j2"
+    src: "traefik-deployment-template-daemonset.yaml.j2"
     dest: "/tmp/k3s/02-traefik.yaml"
     owner: "{{ ansible_user_id }}"
     mode: 0755
@@ -152,17 +152,3 @@
   run_once: true
   until: this.rc == 0
   retries: 5
-
-- name: Create ingress resource for apps
-  template:
-    src: "nginx-ingress-template.yaml.j2"
-    dest: "/tmp/k3s/nginx-ingress.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply ingress resource
-  command: >-
-    k3s kubectl apply -f /tmp/k3s/nginx-ingress.yaml
-  changed_when: false
-  run_once: true
