@@ -112,7 +112,7 @@
 
 - name: Deploy traefik Ingress Controller whomai
   command: >-
-    k3s kubectl apply -f /tmp/k3s/03-whomai.yaml
+    k3s kubectl apply -f /tmp/k3s/03-whoami.yaml
   register: this
   changed_when: false
   run_once: true
