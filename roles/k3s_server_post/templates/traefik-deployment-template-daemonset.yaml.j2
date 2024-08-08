@@ -1,28 +1,40 @@
-kind: DaemonSet
 apiVersion: apps/v1
+kind: DaemonSet
 metadata:
- name: traefik-daemonset
- namespace: ingress-traefik
- labels:
-   app: traefik
+  name: traefik-daemonset
+  namespace: ingress-traefik
+  labels:
+    app: traefik
 spec:
- selector:
-   matchLabels:
-     app: traefik
- template:
-   metadata:
-     labels:
-       app: traefik
-   spec:
-     serviceAccountName: traefik-account
-     containers:
-       - name: traefik
-         image: traefik:v3.1
-         args:
-           - --api.insecure
-           - --providers.kubernetesingress
-         ports:
-           - name: web
-             containerPort: 80
-           - name: dashboard
-             containerPort: 8080
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik-account
+      containers:
+        - name: traefik
+          image: traefik:v3.1
+          args:
+            - --providers.kubernetesIngress
+            - --providers.kubernetesCRD
+            - --api.insecure=true
+            - --entryPoints.web.address=:80
+            - --entryPoints.dashboard.address=:8080
+            - --entryPoints.pinepods.address=:8069
+            - --entryPoints.dashboard.address=:443
+            - --entryPoints.smtp.address=:25
+          ports:
+            - name: web
+              containerPort: 80
+            - name: dashboard
+              containerPort: 8080
+            - name: pinepods
+              containerPort: 8069
+            - name: secure
+              containerPort: 443
+            - name: smtp
+              containerPort: 25
