@@ -1,11 +1,11 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: traefik-role-binding
+  name: traefik-cluster-admin-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: traefik-cluster-role
+  name: traefik-cluster-admin
 subjects:
   - kind: ServiceAccount
     name: traefik-account
