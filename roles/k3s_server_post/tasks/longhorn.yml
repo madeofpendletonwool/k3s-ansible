@@ -1,0 +1,54 @@
+---
+- name: Create manifests directory for Longhorn configuration
+  file:
+    path: /tmp/k3s/longhorn
+    state: directory
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Ensure longhorn-system namespace exists
+  command: >
+    k3s kubectl create namespace longhorn-system
+  args:
+    creates: /tmp/k3s/longhorn-system-created
+  register: create_namespace_result_longhorn
+  failed_when: create_namespace_result_longhorn.rc != 0 and "already exists" not in create_namespace_result_longhorn.stderr
+  changed_when: create_namespace_result_longhorn.rc == 0
+  run_once: true
+
+- name: Deploy Longhorn using official YAML
+  command: >
+    k3s kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.6.2/deploy/longhorn.yaml
+  register: longhorn_deploy_result
+  changed_when: false
+  run_once: true
+  until: longhorn_deploy_result.rc == 0
+  retries: 5
+
+- name: Wait for Longhorn components to be ready
+  shell: >
+    kubectl get pods --namespace longhorn-system --no-headers | grep -v "Running"
+  register: longhorn_pods_not_running
+  retries: 25
+  delay: 6
+  until: longhorn_pods_not_running.stdout == ""
+  changed_when: false
+  run_once: true
+
+- name: Create Ingress resource for Longhorn UI
+  template:
+    src: "longhorn-setup-template.yaml.j2"
+    dest: "/tmp/k3s/longhorn-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply Longhorn Ingress resource
+  command: >
+    k3s kubectl apply -f /tmp/k3s/longhorn-ingress.yaml
+  register: longhorn_ingress_apply_result
+  changed_when: false
+  run_once: true
+  until: longhorn_ingress_apply_result.rc == 0
+  retries: 5

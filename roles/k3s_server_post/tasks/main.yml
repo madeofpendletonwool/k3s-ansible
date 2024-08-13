@@ -23,6 +23,10 @@
   include_tasks: traefik.yml
   tags: traefik
 
+- name: Deploy Longhorn
+  include_tasks: longhorn.yml
+  tags: longhorn
+
 - name: Remove tmp directory used for manifests
   file:
     path: /tmp/k3s
