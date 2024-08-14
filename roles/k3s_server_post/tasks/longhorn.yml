@@ -28,10 +28,10 @@
 
 - name: Wait for Longhorn components to be ready
   shell: >
-    kubectl get pods --namespace longhorn-system --no-headers | grep -v "Running"
+    kubectl get pods --namespace longhorn-system --no-headers | grep -v "Running" || true
   register: longhorn_pods_not_running
-  retries: 25
-  delay: 6
+  retries: 40
+  delay: 10
   until: longhorn_pods_not_running.stdout == ""
   changed_when: false
   run_once: true

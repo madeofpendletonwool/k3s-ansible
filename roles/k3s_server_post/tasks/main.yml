@@ -23,6 +23,10 @@
   include_tasks: traefik.yml
   tags: traefik
 
+# - name: Deploy Rancher
+#   include_tasks: longhorn.yml
+#   tags: longhorn
+
 - name: Deploy Longhorn
   include_tasks: longhorn.yml
   tags: longhorn
