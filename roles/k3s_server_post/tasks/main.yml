@@ -11,7 +11,7 @@
 
 - name: Pause for 10 seconds
   pause:
-    seconds: 10
+    seconds: 1
   delegate_to: localhost
 
 - name: Deploy metallb pool
