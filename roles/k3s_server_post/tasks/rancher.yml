@@ -89,9 +89,15 @@
   ignore_errors: true
   changed_when: false
 
-- name: Add Rancher stable repo if not present
-  command: helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
-  when: "'rancher-stable' not in helm_repo_list.stdout"
+- name: Add Rancher latest repo if not present
+  command: helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
+  when: "'rancher-latest' not in helm_repo_list.stdout"
+  changed_when: true
+  run_once: true
+
+- name: Add jetstack latest repo if not present
+  command: helm repo add jetstack https://charts.jetstack.io
+  when: "'jetstack' not in helm_repo_list.stdout"
   changed_when: true
   run_once: true
 
@@ -99,16 +105,36 @@
   command: helm repo update
   run_once: true
 
+- name: Deploy cert manager
+  command: >
+    k3s kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.13/cert-manager.crds.yaml
 
+- name: Deploy jetstack using Helm
+  command: >
+    helm upgrade --install cert-manager jetstack/cert-manager
+      --namespace cert-manager
+      --create-namespace
+  register: jetstack_deploy_result
+  changed_when: false
+  run_once: true
+  until: jetstack_deploy_result.rc == 0
+  retries: 5
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Deploy Rancher using Helm
   command: >
-    helm install rancher rancher-stable/rancher --namespace cattle-system --set hostname=rancher.{{ nginx_ingress_hostname }}
+    helm upgrade --install rancher rancher-latest/rancher 
+    --namespace cattle-system 
+    --set hostname=rancher.{{ nginx_ingress_hostname }}
+    --kubeconfig /etc/rancher/k3s/k3s.yaml
   register: rancher_deploy_result
   changed_when: false
   run_once: true
   until: rancher_deploy_result.rc == 0
   retries: 5
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Wait for Rancher components to be ready
   shell: >
@@ -134,5 +160,4 @@
   register: rancher_ingress_apply_result
   changed_when: false
   run_once: true
-  until: rancher_ingress_apply_result.rc == 0
-  retries: 5
+  ignore_errors: true
