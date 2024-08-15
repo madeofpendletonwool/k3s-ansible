@@ -1,0 +1,60 @@
+---
+- name: Update Ubuntu server, install Docker, and Git
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Check if Docker is already installed
+      stat:
+        path: /usr/bin/docker
+      register: docker_installed
+
+    - name: Check if Git is already installed
+      stat:
+        path: /usr/bin/git
+      register: git_installed
+
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: not docker_installed.stat.exists or not git_installed.stat.exists
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg-agent
+          - software-properties-common
+        state: present
+      when: not docker_installed.stat.exists
+
+    - name: Download Docker install script
+      shell: curl -fsSL https://get.docker.com -o get-docker.sh
+      when: not docker_installed.stat.exists
+
+    - name: Run Docker install script
+      shell: sudo sh ./get-docker.sh
+      when: not docker_installed.stat.exists
+
+    - name: Ensure Docker service is started
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      when: not docker_installed.stat.exists
+
+    - name: Install Git
+      apt:
+        name: git
+        state: present
+      when: not git_installed.stat.exists
+
+    - name: Reboot the server
+      reboot:
+        msg: "Reboot initiated by Ansible after Docker and Git installation."
+        pre_reboot_delay: 10
+      when: not docker_installed.stat.exists or not git_installed.stat.exists
+

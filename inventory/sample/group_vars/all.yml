@@ -35,7 +35,7 @@ ccilium_bgp_peer_address: "172.17.0.1"
 cilium_bgp_lb_cidr: "172.17.1.0/24"   # cidr for cilium loadbalancer ipam
 
 # apiserver_endpoint is virtual ip-address which will be configured on each master
-apiserver_endpoint: "172.17.0.30"
+apiserver_endpoint: "172.17.0.67"
 
 # k3s_token is required  masters can talk together securely
 # this token should be alpha numeric only
@@ -97,7 +97,7 @@ metal_lb_speaker_tag_version: "v0.14.8"
 metal_lb_controller_tag_version: "v0.14.8"
 
 # metallb ip range for load balancer
-metal_lb_ip_range: "172.17.0.40-172.17.0.49"
+metal_lb_ip_range: "172.17.0.68-172.17.0.75"
 
 # Only enable if your nodes are proxmox LXC nodes, make sure to configure your proxmox nodes
 # in your hosts.ini file.
