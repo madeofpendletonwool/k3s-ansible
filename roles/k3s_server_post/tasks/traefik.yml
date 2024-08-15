@@ -35,6 +35,40 @@
   until: this.rc == 0
   retries: 5
 
+- name: Create storage class for longhorn
+  template:
+    src: "traefik-deployment-template-storageclass.yaml.j2"
+    dest: "/tmp/k3s/00-storageclass.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy storage class for longhorn
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/00-storageclass.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
+- name: Create persistent volume for traefik certificates
+  template:
+    src: "traefik-deployment-template-pvc.yaml.j2"
+    dest: "/tmp/k3s/00-pvc.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy persistent volume for traefik certificates
+  command: >-
+    k3s kubectl apply -f /tmp/k3s/00-pvc.yaml
+  register: this
+  changed_when: false
+  run_once: true
+  until: this.rc == 0
+  retries: 5
+
 - name: Create ingress resource for roles
   template:
     src: "traefik-deployment-template-role.yaml.j2"

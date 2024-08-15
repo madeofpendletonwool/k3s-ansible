@@ -21,20 +21,31 @@ spec:
           args:
             - --providers.kubernetesIngress
             - --providers.kubernetesCRD
+            - --api.dashboard=true
             - --api.insecure=true
             - --entryPoints.web.address=:80
-            - --entryPoints.dashboard.address=:8080
+            - --entryPoints.websecure.address=:443
+            - --entryPoints.dashboard.address=:8081
             - --entryPoints.pinepods.address=:8069
-            - --entryPoints.dashboard.address=:443
             - --entryPoints.smtp.address=:25
+            - --certificatesResolvers.default.acme.email=rgallenberg@3rtnetworks.com
+            - --certificatesResolvers.default.acme.storage=/acme/acme.json
+            - --certificatesResolvers.default.acme.httpChallenge.entryPoint=web
           ports:
             - name: web
               containerPort: 80
+            - name: websecure
+              containerPort: 443
             - name: dashboard
-              containerPort: 8080
+              containerPort: 8081
             - name: pinepods
               containerPort: 8069
-            - name: secure
-              containerPort: 443
             - name: smtp
               containerPort: 25
+          volumeMounts:
+            - name: acme
+              mountPath: /acme
+      volumes:
+        - name: acme
+          persistentVolumeClaim:
+            claimName: traefik-acme-pvc
