@@ -19,6 +19,10 @@
   tags: metallb
   when: kube_vip_lb_ip_range is not defined and (not cilium_bgp or cilium_iface is not defined)
 
+- name: Deploy Longhorn
+  include_tasks: longhorn.yml
+  tags: longhorn
+
 - name: Deploy Traefik
   include_tasks: traefik.yml
   tags: traefik
@@ -26,10 +30,6 @@
 # - name: Deploy Rancher
 #   include_tasks: longhorn.yml
 #   tags: longhorn
-
-- name: Deploy Longhorn
-  include_tasks: longhorn.yml
-  tags: longhorn
 
 - name: Remove tmp directory used for manifests
   file:
