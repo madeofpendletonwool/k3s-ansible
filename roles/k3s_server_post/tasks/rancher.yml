@@ -1,0 +1,138 @@
+---
+- name: Create manifests directory for Rancher configuration
+  file:
+    path: /tmp/k3s/rancher
+    state: directory
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Ensure cattle-system namespace exists
+  command: >
+    k3s kubectl create namespace cattle-system
+  args:
+    creates: /tmp/k3s/cattle-system-created
+  register: create_namespace_result_cattle
+  failed_when: create_namespace_result_cattle.rc != 0 and "already exists" not in create_namespace_result_cattle.stderr
+  changed_when: create_namespace_result_cattle.rc == 0
+  run_once: true
+
+- name: Copy k3s kubeconfig to control node
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /tmp/
+    flat: yes
+  run_once: true
+
+- name: Copy k3s kubeconfig to /tmp on the remote machine
+  copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /tmp/k3s.yaml
+    remote_src: yes
+    mode: '0600'
+  run_once: true
+
+# - name: Replace server IP in kubeconfig with VIP on the control node
+#   local_action:
+#     module: replace
+#     path: /tmp/k3s.yaml
+#     regexp: 'https://127.0.0.1:6443'
+#     replace: 'https://{{ apiserver_endpoint }}:6443'
+#   run_once: true
+# - name: Replace server IP in kubeconfig with VIP
+#   replace:
+#     path: ~/.kube/config/k3s.yaml
+#     regexp: 'https://127.0.0.1:6443'
+#     replace: 'https://{{ apiserver_endpoint }}:6443'
+#   run_once: true
+
+
+# - name: Move the fetched K3s kubeconfig file to ~/.kube/config/k3s.yaml on localhost
+#   local_action:
+#     module: copy
+#     src: /tmp/k3s.yaml
+#     dest: ~/.kube/config/k3s.yaml
+#     mode: '0666'
+
+
+- name: Set KUBECONFIG environment variable
+  set_fact:
+    kubectl_config: /tmp/k3s.yaml
+  run_once: true
+
+- name: Check if Helm is installed
+  command: helm version --short
+  register: helm_installed
+  ignore_errors: true
+  changed_when: false
+
+- name: Download Helm installation script if not installed
+  get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get_helm.sh
+    mode: 0755
+  when: helm_installed.failed
+
+- name: Run Helm installation script if not installed
+  command: /tmp/get_helm.sh
+  when: helm_installed.failed
+
+- name: Verify Helm installation
+  command: helm version
+  register: helm_version
+  changed_when: false
+  run_once: true
+
+- name: Check if Rancher repo is added
+  command: helm repo list
+  register: helm_repo_list
+  ignore_errors: true
+  changed_when: false
+
+- name: Add Rancher stable repo if not present
+  command: helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+  when: "'rancher-stable' not in helm_repo_list.stdout"
+  changed_when: true
+  run_once: true
+
+- name: Update Helm repositories
+  command: helm repo update
+  run_once: true
+
+
+
+- name: Deploy Rancher using Helm
+  command: >
+    helm install rancher rancher-stable/rancher --namespace cattle-system --set hostname=rancher.{{ nginx_ingress_hostname }}
+  register: rancher_deploy_result
+  changed_when: false
+  run_once: true
+  until: rancher_deploy_result.rc == 0
+  retries: 5
+
+- name: Wait for Rancher components to be ready
+  shell: >
+    kubectl get pods --namespace cattle-system --no-headers | grep -v "Running" || true
+  register: rancher_pods_not_running
+  retries: 40
+  delay: 10
+  until: rancher_pods_not_running.stdout == ""
+  changed_when: false
+  run_once: true
+
+- name: Create Ingress resource for Rancher UI
+  template:
+    src: "rancher-ingress-template.yaml.j2"
+    dest: "/tmp/k3s/rancher-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply Rancher Ingress resource
+  command: >
+    k3s kubectl apply -f /tmp/k3s/rancher-ingress.yaml
+  register: rancher_ingress_apply_result
+  changed_when: false
+  run_once: true
+  until: rancher_ingress_apply_result.rc == 0
+  retries: 5
