@@ -124,10 +124,15 @@
 
 - name: Deploy Rancher using Helm
   command: >
-    helm upgrade --install rancher rancher-latest/rancher 
-    --namespace cattle-system 
-    --set hostname=rancher.{{ nginx_ingress_hostname }}
-    --kubeconfig /etc/rancher/k3s/k3s.yaml
+    helm upgrade --install rancher rancher-latest/rancher \
+      --namespace cattle-system \
+      --set hostname=rancher.{{ nginx_ingress_hostname }} \
+      --set ingress.tls.source=secret \
+      --set ports.https.enabled=false \
+      --set ports.http.enabled=true \
+      --set ports.http.port=80 \
+      --set ports.https.port=443 \
+      --kubeconfig /etc/rancher/k3s/k3s.yaml
   register: rancher_deploy_result
   changed_when: false
   run_once: true

@@ -10,7 +10,7 @@
 - name: Create rbac resource for gh-actions
   template:
     src: "gh-actions-setup-template.yaml.j2"
-    dest: "/tmp/k3s/longhorn-ingress.yaml"
+    dest: "/tmp/k3s/gh-actions.yaml"
     owner: "{{ ansible_user_id }}"
     mode: 0755
   run_once: true
@@ -18,8 +18,8 @@
 - name: Apply gh-actions rbac resource
   command: >
     k3s kubectl apply -f /tmp/k3s/gh-actions.yaml
-  register: longhorn_ingress_apply_result
+  register: gh_actions_apply_result
   changed_when: false
   run_once: true
-  until: longhorn_ingress_apply_result.rc == 0
+  until: gh_actions_apply_result.rc == 0
   retries: 5

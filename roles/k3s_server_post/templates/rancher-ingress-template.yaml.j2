@@ -5,6 +5,7 @@ metadata:
   namespace: cattle-system
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   rules:
   - host: rancher.{{ nginx_ingress_hostname }}
@@ -28,6 +29,6 @@ spec:
     - name: rancher-port
       protocol: TCP
       port: 8051
-      targetPort: 80
+      targetPort: 443
   selector:
     app: longhorn-ui

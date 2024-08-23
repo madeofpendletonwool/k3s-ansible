@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: github-actions
-  namespace: default
+  namespace: arc-runners
 
 ---
 
@@ -33,7 +33,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: github-actions
-    namespace: default
+    namespace: arc-runners
 roleRef:
   kind: ClusterRole
   name: github-actions-role
