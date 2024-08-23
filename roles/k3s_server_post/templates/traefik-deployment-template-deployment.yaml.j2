@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Deployment
 metadata:
-  name: traefik-daemonset
+  name: traefik-deployment
   namespace: ingress-traefik
   labels:
     app: traefik
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app: traefik
@@ -26,9 +27,10 @@ spec:
             - --entryPoints.web.address=:80
             - --entryPoints.websecure.address=:443
             - --certificatesresolvers.default.acme.tlschallenge
-            - --certificatesResolvers.default.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+            - --certificatesResolvers.default.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
             - --certificatesResolvers.default.acme.email=rgallenberg@3rtnetworks.com
             - --certificatesResolvers.default.acme.storage=/acme/acme.json
+            - --log.level=DEBUG
           ports:
             - name: web
               containerPort: 80

@@ -52,3 +52,28 @@
   run_once: true
   until: longhorn_ingress_apply_result.rc == 0
   retries: 5
+
+- name: Add tolerations to Longhorn deployments
+  shell: |
+    kubectl -n longhorn-system patch deployment {{ item }} --patch '
+    spec:
+      template:
+        spec:
+          tolerations:
+            - key: "node.kubernetes.io/unreachable"
+              operator: "Exists"
+              effect: "NoExecute"
+              tolerationSeconds: 15
+            - key: "node.kubernetes.io/not-ready"
+              operator: "Exists"
+              effect: "NoExecute"
+              tolerationSeconds: 15
+    '
+  loop:
+    - csi-attacher
+    - csi-provisioner
+    - csi-resizer
+    - csi-snapshotter
+    - longhorn-driver-deployer
+    - longhorn-ui
+  run_once: true
