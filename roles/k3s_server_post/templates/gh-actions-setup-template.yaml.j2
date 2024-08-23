@@ -11,18 +11,9 @@ kind: ClusterRole
 metadata:
   name: github-actions-role
 rules:
-- apiGroups: [""]
-  resources: ["pods", "services", "configmaps", "secrets"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["apps"]
-  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["batch"]
-  resources: ["jobs", "cronjobs"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["extensions"]
-  resources: ["ingresses"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["*"]  # All API groups
+  resources: ["*"]  # All resources
+  verbs: ["*"]      # All actions (get, list, create, update, delete, etc.)
 
 ---
 
