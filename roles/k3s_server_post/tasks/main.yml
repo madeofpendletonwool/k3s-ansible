@@ -28,6 +28,10 @@
   tags: traefik
 
 - name: Deploy Rancher
+  include_tasks: gh-action-setup.yml
+  tags: longhorn
+
+- name: Deploy Rancher
   include_tasks: rancher.yml
   tags: longhorn
 
