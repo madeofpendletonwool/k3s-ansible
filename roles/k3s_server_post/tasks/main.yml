@@ -27,13 +27,17 @@
   include_tasks: traefik.yml
   tags: traefik
 
-- name: Deploy Rancher
+- name: Deploy gh actions
   include_tasks: gh-action-setup.yml
-  tags: longhorn
+  tags: gh-actions
 
 - name: Deploy Rancher
   include_tasks: rancher.yml
-  tags: longhorn
+  tags: rancher
+
+- name: Deploy log-stack
+  include_tasks: log-stack.yml
+  tags: log-stack
 
 - name: Remove tmp directory used for manifests
   file:
