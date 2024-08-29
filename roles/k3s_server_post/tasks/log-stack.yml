@@ -1,0 +1,109 @@
+---
+- name: Create manifests directory for log-stack configuration
+  file:
+    path: /tmp/k3s/rancher
+    state: directory
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Ensure log-stack namespace exists
+  command: >
+    k3s kubectl create namespace log-stack
+  args:
+    creates: /tmp/k3s/log-stack-created
+  register: create_namespace_result_log
+  failed_when: create_namespace_result_log.rc != 0 and "already exists" not in create_namespace_result_log.stderr
+  changed_when: create_namespace_result_log.rc == 0
+  run_once: true
+
+- name: Set KUBECONFIG environment variable
+  set_fact:
+    kubectl_config: /tmp/k3s.yaml
+  run_once: true
+
+- name: Check if Helm is installed
+  command: helm version --short
+  register: helm_installed
+  ignore_errors: true
+  changed_when: false
+
+- name: Download Helm installation script if not installed
+  get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get_helm.sh
+    mode: 0755
+  when: helm_installed.failed
+
+- name: Run Helm installation script if not installed
+  command: /tmp/get_helm.sh
+  when: helm_installed.failed
+
+- name: Verify Helm installation
+  command: helm version
+  register: helm_version
+  changed_when: false
+  run_once: true
+
+- name: Check if Rancher repo is added
+  command: helm repo list
+  register: helm_repo_list
+  ignore_errors: true
+  changed_when: false
+
+- name: Update Helm repositories
+  command: helm repo update
+  run_once: true
+
+- name: Check if prometheus repo is added
+  command: helm repo list
+  register: helm_repo_list
+  ignore_errors: true
+  changed_when: false
+
+- name: Add prometheus latest repo if not present
+  command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  when: "'prometheus-community' not in helm_repo_list.stdout"
+  changed_when: true
+  run_once: true
+
+- name: Copy alertmanager.yaml to the remote server
+  template:
+    src: "alertmanager.yaml"
+    dest: "/tmp/k3s/alertmanager.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Deploy log-stack using Helm
+  command: >
+    helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack --values /tmp/k3s/alertmanager.yaml --force
+  register: prom_deploy_result
+  changed_when: false
+  run_once: true
+  until: prom_deploy_result.rc == 0
+  retries: 5
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+
+- name: Create Ingress resource for log-stack UIs
+  template:
+    src: "log-stack-template.yaml.j2"
+    dest: "/tmp/k3s/log-stack-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply log-stack Ingress resource
+  command: >
+    k3s kubectl apply -f /tmp/k3s/log-stack-ingress.yaml
+  register: rancher_ingress_apply_result
+  changed_when: false
+  run_once: true
+  ignore_errors: true
+
+- name: Set Grafana Default admin pass
+  command: >
+    kubectl exec -it $(kubectl get pods -l "app.kubernetes.io/name=grafana" -o jsonpath="{.items[0].metadata.name}") -- grafana cli admin reset-admin-password {{ grafana_admin_pass }}
+  run_once: true

@@ -173,3 +173,5 @@ custom_registries_yaml: |
 nginx_ingress_hostname: 3rtnetworks.com
 
 grafana_admin_pass: admin
+
+ntfy_custom_url: https://ntfy.3rtnetworks.com/irony-map-deteriorate-complete-beef
