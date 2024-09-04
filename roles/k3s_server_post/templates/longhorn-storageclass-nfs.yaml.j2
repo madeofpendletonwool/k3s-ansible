@@ -1,0 +1,13 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: donghorn-nfs
+provisioner: driver.longhorn.io
+parameters:
+  nfs.server: "{{ external_storage_ip }}"
+  nfs.path: "{{ external_storage_path }}"
+  allowVolumeExpansion: "true"
+  fsType: ext4
+  fromBackup: ""
+reclaimPolicy: Retain
+volumeBindingMode: Immediate

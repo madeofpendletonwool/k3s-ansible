@@ -175,3 +175,7 @@ nginx_ingress_hostname: 3rtnetworks.com
 grafana_admin_pass: admin
 
 ntfy_custom_url: https://ntfy.3rtnetworks.com/irony-map-deteriorate-complete-beef
+# Ignore ip and path if the nfs_storage option is false
+use_external_nfs_storage: true
+external_storage_ip: '10.202.41.71'
+external_storage_path: '/exports/main-data'

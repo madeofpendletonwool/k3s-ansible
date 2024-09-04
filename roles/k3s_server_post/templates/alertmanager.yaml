@@ -1,14 +1,11 @@
 alertmanager:
-  tplConfig: false  # Disable Helm templating for Alertmanager config
   config:
-    templates:
-      - /etc/alertmanager/templates/ntfy-template.tmpl
     receivers:
-      - name: "ntfy"
+      - name: "null"  # Keep the default null receiver
+      - name: "ntfy"  # Add your custom ntfy receiver
         webhook_configs:
           - send_resolved: true
             url: '{{ ntfy_custom_url }}'
-            template: ntfy-template.tmpl
     route:
       receiver: 'ntfy'
       group_by: ['namespace']
