@@ -7,6 +7,17 @@
     mode: 0755
   run_once: true
 
+- name: Ensure arc-runners namespace exists
+  command: >
+    k3s kubectl create namespace arc-runners
+  args:
+    creates: /tmp/k3s/arc-runners-created
+  register: create_namespace_result_arc
+  failed_when: create_namespace_result_arc.rc != 0 and "already exists" not in create_namespace_result_arc.stderr
+  changed_when: create_namespace_result_arc.rc == 0
+  run_once: true
+
+
 - name: Create rbac resource for gh-actions
   template:
     src: "gh-actions-setup-template.yaml.j2"

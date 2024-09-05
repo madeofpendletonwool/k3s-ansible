@@ -17,13 +17,6 @@
   changed_when: create_namespace_result_cattle.rc == 0
   run_once: true
 
-- name: Copy k3s kubeconfig to control node
-  fetch:
-    src: /etc/rancher/k3s/k3s.yaml
-    dest: /tmp/
-    flat: yes
-  run_once: true
-
 - name: Copy k3s kubeconfig to /tmp on the remote machine
   copy:
     src: /etc/rancher/k3s/k3s.yaml
@@ -31,6 +24,27 @@
     remote_src: yes
     mode: '0600'
   run_once: true
+
+- name: Replace localhost IP with the desired server IP in kubeconfig on the remote machine
+  ansible.builtin.replace:
+    path: /tmp/k3s.yaml
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: 'https://{{ apiserver_endpoint }}:6443'
+  run_once: true
+
+- name: Copy modified k3s kubeconfig to control node
+  fetch:
+    src: /tmp/k3s.yaml
+    dest: /tmp/
+    flat: yes
+  run_once: true
+
+- name: Remove temporary k3s kubeconfig file from the remote machine
+  file:
+    path: /tmp/k3s.yaml
+    state: absent
+  run_once: true
+
 
 # - name: Replace server IP in kubeconfig with VIP on the control node
 #   local_action:
@@ -140,16 +154,6 @@
   retries: 5
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-
-- name: Wait for Rancher components to be ready
-  shell: >
-    kubectl get pods --namespace cattle-system --no-headers | grep -v "Running" || true
-  register: rancher_pods_not_running
-  retries: 40
-  delay: 10
-  until: rancher_pods_not_running.stdout == ""
-  changed_when: false
-  run_once: true
 
 - name: Create Ingress resource for Rancher UI
   template:

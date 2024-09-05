@@ -26,6 +26,26 @@
   until: longhorn_deploy_result.rc == 0
   retries: 5
 
+- name: Create StorageClass for Longhorn with NFS
+  template:
+    src: "longhorn-storageclass-nfs.yaml.j2"
+    dest: "/tmp/k3s/longhorn-storageclass.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  when: use_external_nfs_storage
+  run_once: true
+
+- name: Apply the Longhorn StorageClass with NFS
+  command: >
+    k3s kubectl apply -f /tmp/k3s/longhorn-storageclass.yaml
+  when: use_external_nfs_storage
+  register: longhorn_storageclass_result
+  changed_when: false
+  run_once: true
+  until: longhorn_storageclass_result.rc == 0
+  retries: 5
+
+
 - name: Wait for Longhorn components to be ready
   shell: >
     kubectl get pods --namespace longhorn-system --no-headers | grep -v "Running" || true
