@@ -1,0 +1,12 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: donghorn-nfs
+provisioner: nfs-client
+parameters:
+  server: "{{ external_storage_ip }}"
+  path: "{{ external_storage_path }}"
+  readOnly: "false"
+reclaimPolicy: Retain
+mountOptions:
+  - nfsvers=4.1
