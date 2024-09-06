@@ -26,37 +26,37 @@
   until: longhorn_deploy_result.rc == 0
   retries: 5
 
-# Check if the StorageClass exists
-- name: Check if the StorageClass exists
-  command: kubectl get storageclass donghorn-nfs --ignore-not-found
-  register: sc_exists
-  changed_when: false
-  run_once: true
+# # Check if the StorageClass exists
+# - name: Check if the StorageClass exists
+#   command: kubectl get storageclass donghorn-nfs --ignore-not-found
+#   register: sc_exists
+#   changed_when: false
+#   run_once: true
 
-# Delete the existing StorageClass if it exists
-- name: Delete existing StorageClass if it exists
-  command: kubectl delete storageclass donghorn-nfs
-  when: sc_exists.stdout != ''
-  run_once: true
+# # Delete the existing StorageClass if it exists
+# - name: Delete existing StorageClass if it exists
+#   command: kubectl delete storageclass donghorn-nfs
+#   when: sc_exists.stdout != ''
+#   run_once: true
 
-- name: Create StorageClass for Longhorn with NFS
-  template:
-    src: "longhorn-storageclass-nfs.yaml.j2"
-    dest: "/tmp/k3s/longhorn-storageclass.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  when: use_external_nfs_storage
-  run_once: true
+# - name: Create StorageClass for Longhorn with NFS
+#   template:
+#     src: "longhorn-storageclass-nfs.yaml.j2"
+#     dest: "/tmp/k3s/longhorn-storageclass.yaml"
+#     owner: "{{ ansible_user_id }}"
+#     mode: 0755
+#   when: use_external_nfs_storage
+#   run_once: true
 
-- name: Apply the Longhorn StorageClass with NFS
-  command: >
-    k3s kubectl apply -f /tmp/k3s/longhorn-storageclass.yaml
-  when: use_external_nfs_storage
-  register: longhorn_storageclass_result
-  changed_when: false
-  run_once: true
-  until: longhorn_storageclass_result.rc == 0
-  retries: 5
+# - name: Apply the Longhorn StorageClass with NFS
+#   command: >
+#     k3s kubectl apply -f /tmp/k3s/longhorn-storageclass.yaml
+#   when: use_external_nfs_storage
+#   register: longhorn_storageclass_result
+#   changed_when: false
+#   run_once: true
+#   until: longhorn_storageclass_result.rc == 0
+#   retries: 5
 
 
 - name: Wait for Longhorn components to be ready

@@ -35,49 +35,22 @@
   until: this.rc == 0
   retries: 5
 
-# # Check if the StorageClass exists
-# - name: Check if the StorageClass exists
-#   command: kubectl get storageclass {{ 'donghorn-nfs' if use_external_nfs_storage else 'donghorn' }} --ignore-not-found
-#   register: sc_exists
-#   changed_when: false
-#   run_once: true
-
-# # Delete the existing StorageClass if it exists
-# - name: Delete existing StorageClass if it exists
-#   command: kubectl delete storageclass {{ 'donghorn-nfs' if use_external_nfs_storage else 'donghorn' }}
-#   when: sc_exists.stdout != ''
-#   run_once: true
-
-# Choose the correct StorageClass template based on use_external_nfs_storage
-- name: Create storage class for NFS or Longhorn
+- name: Create storage class for longhorn
   template:
-    src: "{{ 'traefik-deployment-template-storageclass-nfs.yaml.j2' if use_external_nfs_storage else 'traefik-deployment-template-storageclass.yaml.j2' }}"
+    src: "traefik-deployment-template-storageclass.yaml.j2"
     dest: "/tmp/k3s/00-storageclass.yaml"
     owner: "{{ ansible_user_id }}"
     mode: 0755
   run_once: true
 
-- name: Deploy storage class for NFS or Longhorn
-  command: >
+- name: Deploy storage class for longhorn
+  command: >-
     k3s kubectl apply -f /tmp/k3s/00-storageclass.yaml
   register: this
   changed_when: false
   run_once: true
   until: this.rc == 0
   retries: 5
-
-# # Check if the PVC exists
-# - name: Check if the PVC exists
-#   command: kubectl get pvc traefik-acme-pvc -n ingress-traefik --ignore-not-found
-#   register: pvc_exists
-#   changed_when: false
-#   run_once: true
-
-# # Delete the existing PVC if it exists
-# - name: Delete existing PVC if it exists
-#   command: kubectl delete pvc traefik-acme-pvc -n ingress-traefik --grace-period=0 --force
-#   when: pvc_exists.stdout != ''
-#   run_once: true
 
 - name: Create persistent volume for traefik certificates
   template:

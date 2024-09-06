@@ -103,11 +103,11 @@
   run_once: true
   ignore_errors: true
 
-- name: Get Grafana Pod Name
-  command: kubectl get pods -l "app.kubernetes.io/name=grafana" -o jsonpath="{.items[0].metadata.name}"
-  register: grafana_pod_name
-  run_once: true
+# - name: Get Grafana Pod Name
+#   command: kubectl get pods -l "app.kubernetes.io/name=grafana" -o jsonpath="{.items[0].metadata.name}"
+#   register: grafana_pod_name
+#   run_once: true
 
-- name: Set Grafana Default Admin Pass
-  command: kubectl exec {{ grafana_pod_name.stdout }} -c grafana -- grafana-cli admin reset-admin-password {{ grafana_admin_pass }}
-  run_once: true
+# - name: Set Grafana Default Admin Pass
+#   command: kubectl exec {{ grafana_pod_name.stdout }} -c grafana -- grafana-cli admin reset-admin-password {{ grafana_admin_pass }}
+#   run_once: true
