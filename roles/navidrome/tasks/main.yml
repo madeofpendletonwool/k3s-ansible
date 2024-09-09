@@ -121,6 +121,15 @@
     state: started
   become: true
 
+- name: Ensure the cron job is present
+  ansible.builtin.cron:
+    name: "Sync data from navidrome-storage to NFS"
+    minute: "0"
+    hour: "2"
+    job: "/path/to/sync-data-script.sh >> /var/log/sync-data-script.log 2>&1"
+    state: present
+    user: root
+
 
 - name: Recursively remove directory
   ansible.builtin.file:
