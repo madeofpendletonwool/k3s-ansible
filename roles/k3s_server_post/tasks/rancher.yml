@@ -90,13 +90,13 @@
 - name: Run Helm installation script if not installed
   command: /tmp/get_helm.sh
   when: helm_installed.failed
+  register: helm_install_script_result
 
 - name: Verify Helm installation
   command: helm version
   register: helm_version
   changed_when: false
   run_once: true
-
 - name: Check if Rancher repo is added
   command: helm repo list
   register: helm_repo_list

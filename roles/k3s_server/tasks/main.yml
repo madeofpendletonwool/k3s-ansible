@@ -35,6 +35,15 @@
   tags: kubevip
   when: kube_vip_lb_ip_range is defined
 
+- name: Copy k3s binary to /usr/bin/
+  copy:
+    src: /usr/local/bin/k3s
+    dest: /usr/bin/k3s
+    mode: '0755'
+    remote_src: yes
+  become: yes
+
+
 - name: Init cluster inside the transient k3s-init service
   command:
     cmd: "systemd-run -p RestartSec=2 \
@@ -42,6 +51,7 @@
                       --unit=k3s-init \
                       k3s server {{ server_init_args }}"
     creates: "{{ systemd_dir }}/k3s-init.service"
+
 
 - name: Verification
   when: not ansible_check_mode

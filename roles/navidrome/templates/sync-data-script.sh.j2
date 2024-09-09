@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# Variables
+CURRENT_NODE_IP={{ ansible_host }}
+NFS_SERVER_IP={{ nfs_server }}
+NFS_PATH={{ nfs_app_data_path }}navidrome-storage
+MOUNT_POINT=/mnt/main-data/app-data/navidrome-storage
+
+# Mount the NFS share
+sudo mkdir -p $MOUNT_POINT
+echo "Mounting NFS share from $NFS_SERVER_IP:$NFS_PATH to $MOUNT_POINT"
+sudo mount -t nfs $NFS_SERVER_IP:$NFS_PATH $MOUNT_POINT
+
+# Check if mount was successful
+if [ $? -ne 0 ]; then
+  echo "Failed to mount NFS share. Exiting."
+  exit 1
+fi
+
+# Sync data to the NFS mount
+echo "Syncing data to $MOUNT_POINT"
+sudo rsync -avz /mnt/navidrome-storage/navidrome.db $MOUNT_POINT/navidrome.db
+sudo rsync -avz $MOUNT_POINT/navidrome.db /mnt/navidrome-storage/navidrome.db
+
+# Check if rsync was successful
+if [ $? -ne 0 ]; then
+  echo "rsync failed. Exiting."
+  # Optionally, you might want to unmount the share if rsync fails
+  sudo umount $MOUNT_POINT
+  exit 1
+fi
+
+# Unmount the NFS share
+echo "Unmounting $MOUNT_POINT"
+sudo umount $MOUNT_POINT
+
+# Check if unmount was successful
+if [ $? -ne 0 ]; then
+  echo "Failed to unmount $MOUNT_POINT"
+  exit 1
+fi
+
+echo "Script completed successfully."
