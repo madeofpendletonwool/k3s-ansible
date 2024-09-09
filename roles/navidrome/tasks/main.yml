@@ -57,6 +57,23 @@
   until: navidrome_service_apply_result.rc == 0
   retries: 5
 
+- name: Create Ingress for Navidrome
+  template:
+    src: "navidrome-ingress-template.yaml.j2"
+    dest: "/tmp/k3s/navidrome-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply Ingress for Navidrome
+  command: >
+    k3s kubectl apply -f /tmp/k3s/navidrome-ingress.yaml
+  register: navidrome_ingress_apply_result
+  changed_when: false
+  run_once: true
+  until: navidrome_ingress_apply_result.rc == 0
+  retries: 5
+
 - name: Create PV for Navidrome Data
   template:
     src: "navidrome-pv-template.yaml.j2"
