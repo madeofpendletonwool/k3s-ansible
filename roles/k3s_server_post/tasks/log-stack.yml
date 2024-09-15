@@ -45,12 +45,6 @@
   changed_when: false
   run_once: true
 
-- name: Check if Rancher repo is added
-  command: helm repo list
-  register: helm_repo_list
-  ignore_errors: true
-  changed_when: false
-
 - name: Update Helm repositories
   command: helm repo update
   run_once: true

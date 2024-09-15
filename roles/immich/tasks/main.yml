@@ -1,0 +1,154 @@
+
+- name: Create a directory for immich storage if it does not exist
+  ansible.builtin.file:
+    path: /mnt/immich-storage
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Create a directory for temporary files if it does not exist
+  ansible.builtin.file:
+    path: /tmp/k3s
+    state: directory
+    mode: '0755'
+
+
+- name: Create Deployment for immich
+  template:
+    src: "immich-deployment-template.yaml.j2"
+    dest: "/tmp/k3s/immich-deployment.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Ensure immich namespace exists
+  command: >
+    k3s kubectl create namespace immich
+  args:
+    creates: /tmp/k3s/cattle-system-created
+  register: create_namespace_result_immich
+  failed_when: create_namespace_result_immich.rc != 0 and "already exists" not in create_namespace_result_immich.stderr
+  changed_when: create_namespace_result_immich.rc == 0
+  run_once: true
+
+- name: Apply Deployment for immich
+  command: >
+    k3s kubectl apply -f /tmp/k3s/immich-deployment.yaml
+  register: immich_deployment_apply_result
+  changed_when: false
+  run_once: true
+  until: immich_deployment_apply_result.rc == 0
+  retries: 5
+
+- name: Create Service for immich
+  template:
+    src: "immich-service-template.yaml.j2"
+    dest: "/tmp/k3s/immich-service.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply Service for immich
+  command: >
+    k3s kubectl apply -f /tmp/k3s/immich-service.yaml
+  register: immich_service_apply_result
+  changed_when: false
+  run_once: true
+  until: immich_service_apply_result.rc == 0
+  retries: 5
+
+- name: Create Ingress for immich
+  template:
+    src: "immich-ingress-template.yaml.j2"
+    dest: "/tmp/k3s/immich-ingress.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply Ingress for immich
+  command: >
+    k3s kubectl apply -f /tmp/k3s/immich-ingress.yaml
+  register: immich_ingress_apply_result
+  changed_when: false
+  run_once: true
+  until: immich_ingress_apply_result.rc == 0
+  retries: 5
+
+- name: Create PV for immich Data
+  template:
+    src: "immich-pv-template.yaml.j2"
+    dest: "/tmp/k3s/immich-pv.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply PV for immich Data
+  command: >
+    k3s kubectl apply -f /tmp/k3s/immich-pv.yaml
+  register: immich_pv_apply_result
+  changed_when: false
+  run_once: true
+  until: immich_pv_apply_result.rc == 0
+  retries: 5
+
+- name: Create PVC for immich Data
+  template:
+    src: "immich-nfs-pvc-template.yaml.j2"
+    dest: "/tmp/k3s/immich-pvc.yaml"
+    owner: "{{ ansible_user_id }}"
+    mode: 0755
+  run_once: true
+
+- name: Apply PVC for immich Data
+  command: >
+    k3s kubectl apply -f /tmp/k3s/immich-pvc.yaml
+  register: immich_pvc_apply_result
+  changed_when: false
+  run_once: true
+  until: immich_pvc_apply_result.rc == 0
+  retries: 5
+
+- name: Ensure rsync is installed on all nodes
+  package:
+    name: rsync
+    state: present
+  become: true
+
+- name: Ensure rsyslog is installed on all nodes
+  package:
+    name: rsyslog
+    state: present
+  become: true
+
+- name: Fetch node IPs
+  ansible.builtin.set_fact:
+    node_ips: "{{ groups['node'] | join(' ') }}"
+  become: true
+
+- name: Generate data synchronization script
+  ansible.builtin.template:
+    src: sync-data-script.sh.j2
+    dest: /etc/cron.d/sync-data-script
+    mode: '0755'
+  become: true
+
+- name: Ensure cron service is running
+  ansible.builtin.service:
+    name: cron
+    state: started
+  become: true
+
+- name: Ensure the cron job is present
+  ansible.builtin.cron:
+    name: "Sync data from immich-storage to NFS"
+    minute: "0"
+    hour: "2"
+    job: "/path/to/sync-data-script.sh >> /var/log/sync-data-script.log 2>&1"
+    state: present
+    user: root
+
+
+- name: Recursively remove directory
+  ansible.builtin.file:
+    path: /tmp/k3s
+    state: absent
