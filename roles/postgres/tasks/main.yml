@@ -24,6 +24,7 @@
   register: helm_installed
   ignore_errors: true
   changed_when: false
+  run_once: true
 
 - name: Download Helm installation script if not installed
   get_url:
@@ -31,10 +32,12 @@
     dest: /tmp/get_helm.sh
     mode: 0755
   when: helm_installed.failed
+  run_once: true
 
 - name: Run Helm installation script if not installed
   command: /tmp/get_helm.sh
   when: helm_installed.failed
+  run_once: true
 
 - name: Verify Helm installation
   command: helm version
@@ -47,9 +50,11 @@
   register: helm_repo_list
   ignore_errors: true
   changed_when: false
+  run_once: true
 
 - name: Update Helm repositories
   command: helm repo update
+  run_once: true
   run_once: true
 
 - name: Add postgres latest repo if not present
@@ -85,7 +90,7 @@
 
 - name: Apply PVC for postgres Data
   command: >
-    k3s kubectl apply -f /tmp/k3s/postgres-pvc.yaml
+    k3s kubectl apply -f /tmp/k3s/postgres-pvc.yaml -n postgres
   register: postgres_pvc_apply_result
   changed_when: false
   run_once: true
@@ -94,13 +99,15 @@
 
 - name: Deploy postgres using Helm
   command: >
-    helm upgrade --install my-postgresql bitnami/postgresql --version 15.5.28 --set persistence.existingClaim=pgdata --set primary.persistence.storageClass=donghorn --set primary.persistence.size=10Gi
+    helm upgrade --install my-postgresql bitnami/postgresql -n postgres
+    --version 15.5.28 
+    --set persistence.existingClaim=pgdata 
+    --set primary.persistence.storageClass=longhorn 
+    --set primary.persistence.size=10Gi
   register: postgres_deploy_result
   changed_when: false
   run_once: true
-  until: postgres_deploy_result.rc == 0  --set persistence.existingClaim=pgdata \
-  --set primary.persistence.storageClass=longhorn \
-  --set primary.persistence.size=10Gi
+  until: postgres_deploy_result.rc == 0
   retries: 5
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
@@ -109,3 +116,46 @@
   ansible.builtin.file:
     path: /tmp/k3s
     state: absent
+
+- name: Get PostgreSQL password
+  shell: |
+    k3s kubectl get secret --namespace postgres my-postgresql -o jsonpath="{.data.postgres-password}" | base64 --decode
+  register: postgres_password
+  changed_when: false
+  run_once: true
+
+- name: Ensure pip packaging is installed
+  ansible.builtin.package:
+    name: python3-packaging
+    state: present
+  become: yes
+
+- name: Ensure pip kubernetes is installed
+  ansible.builtin.package:
+    name: python3-kubernetes
+    state: present
+  become: yes
+  # run-once: true
+
+- name: Get PostgreSQL service details
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Service
+    name: my-postgresql
+    namespace: postgres
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+  register: postgres_service
+  run_once: true
+
+- name: Display PostgreSQL connection information
+  debug:
+    msg: 
+      - "PostgreSQL is now deployed and running."
+      - "Connection details:"
+      - "  Host: {{ postgres_service.result.spec.clusterIP }}"
+      - "  Port: {{ postgres_service.result.spec.ports[0].port }}"
+      - "  User: postgres"
+      - "  Password: {{ postgres_password.stdout }}"
+      - "To connect using kubectl port-forward:"
+      - "  kubectl port-forward --namespace postgres svc/my-postgresql 5432:5432"
+      - "Then use: psql -h 127.0.0.1 -U postgres -d postgres"
