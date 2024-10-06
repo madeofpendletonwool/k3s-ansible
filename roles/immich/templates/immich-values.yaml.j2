@@ -1,0 +1,91 @@
+# Shared environment variables
+env:
+  REDIS_HOSTNAME: "{{ immich_release_name }}-redis-master"
+  DB_HOSTNAME: "{{ immich_release_name }}-postgresql"
+  DB_USERNAME: "immich"
+  DB_DATABASE_NAME: "immich"
+  DB_PASSWORD: "immich"
+  IMMICH_MACHINE_LEARNING_URL: "http://{{ immich_release_name }}-machine-learning:3003"
+image:
+  tag: "{{ immich_image_tag }}"
+immich:
+  metrics:
+    enabled: false
+  persistence:
+    library:
+      existingClaim: immich-library-pvc
+postgresql:
+  enabled: true
+  image:
+    repository: tensorchord/pgvecto-rs
+    tag: pg14-v0.2.0
+  auth:
+    username: "immich"
+    database: "immich"
+    password: "immich"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "donghorn"
+      size: 8Gi
+    initdb:
+      scripts:
+        create-extensions.sql: |
+          CREATE EXTENSION cube;
+          CREATE EXTENSION earthdistance;
+          CREATE EXTENSION vectors;
+    containerSecurityContext:
+      runAsUser: 1001
+      runAsNonRoot: true
+    podSecurityContext:
+      fsGroup: 1001
+    extraVolumes:
+      - name: run
+        emptyDir: {}
+    extraVolumeMounts:
+      - name: run
+        mountPath: /var/run/postgresql
+    extraEnvVars:
+      - name: POSTGRESQL_DATA_DIR
+        value: /bitnami/postgresql/data
+      - name: PGDATA
+        value: /bitnami/postgresql/data
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      storageClass: "donghorn"
+      size: 2Gi
+  ingress:
+    main:
+      enabled: true
+      # Remove the ingressClassName
+      # ingressClassName: traefik
+      annotations:
+        # Remove the nginx annotation
+        # nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        # Add the Traefik annotation
+        traefik.ingress.kubernetes.io/router.entrypoints: web
+      hosts:
+        - host: "{{ immich_domain }}"
+          paths:
+            - path: "/"
+              pathType: Prefix
+      tls: []
+
+machine-learning:
+  enabled: true
+  image:
+    repository: ghcr.io/immich-app/immich-machine-learning
+    pullPolicy: IfNotPresent
+  env:
+    TRANSFORMERS_CACHE: /cache
+  persistence:
+    cache:
+      enabled: true
+      size: 5Gi
+      storageClass: "donghorn"

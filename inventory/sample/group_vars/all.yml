@@ -189,3 +189,11 @@ nfs_storageclass_name: "main-nfs"
 nfs_music_path: "/mnt/main-data/rad-nas/Music"
 nfs_nav_data_path: "/mnt/main-data/rad-nas/app-data/navidrome-data"
 navidrome_pvc_name: "navidrome-data-pvc-1"
+
+# immich server config
+
+immich_release_name: immich
+immich_namespace: immich
+immich_domain: immich.collinpendleton.com
+immich_chart_version: v1.115.0
+nfs_immich_library_path: "/mnt/main-data/rad-nas/app-data/pictures"
