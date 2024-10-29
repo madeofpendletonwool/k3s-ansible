@@ -1,98 +1,154 @@
 ---
-- name: Create manifests directory for Longhorn configuration
-  file:
-    path: /tmp/k3s/longhorn
-    state: directory
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
+# roles/longhorn_deployment/tasks/main.yml
 
-- name: Ensure longhorn-system namespace exists
-  command: >
-    k3s kubectl create namespace longhorn-system
-  args:
-    creates: /tmp/k3s/longhorn-system-created
-  register: create_namespace_result_longhorn
-  failed_when: create_namespace_result_longhorn.rc != 0 and "already exists" not in create_namespace_result_longhorn.stderr
-  changed_when: create_namespace_result_longhorn.rc == 0
-  run_once: true
+# First configure Talos nodes
+- name: Generate Talos system extension schematic
+  ansible.builtin.copy:
+    dest: "/tmp/longhorn-schematic.yaml"
+    content: |
+      customization:
+        systemExtensions:
+          officialExtensions:
+            - siderolabs/iscsi-tools
+            - siderolabs/util-linux-tools
+  delegate_to: localhost
 
-- name: Deploy Longhorn using official YAML
-  command: >
-    k3s kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.6.2/deploy/longhorn.yaml
-  register: longhorn_deploy_result
-  changed_when: false
-  run_once: true
-  until: longhorn_deploy_result.rc == 0
-  retries: 5
+- name: Get Talos image ID for system extensions
+  ansible.builtin.uri:
+    url: https://factory.talos.dev/schematics
+    method: POST
+    body: "{{ lookup('file', '/tmp/longhorn-schematic.yaml') }}"
+    status_code: 200
+  register: talos_image_id
+  delegate_to: localhost
 
-# # Check if the StorageClass exists
-# - name: Check if the StorageClass exists
-#   command: kubectl get storageclass donghorn-nfs --ignore-not-found
-#   register: sc_exists
-#   changed_when: false
-#   run_once: true
+- name: Create Talos controlplane configuration
+  ansible.builtin.template:
+    src: controlplane.yaml.j2
+    dest: /tmp/talos-config/controlplane.yaml
+  vars:
+    talos_image: "factory.talos.dev/installer/{{ talos_image_id.json.id }}:{{ talos_version }}"
+  delegate_to: localhost
 
-# # Delete the existing StorageClass if it exists
-# - name: Delete existing StorageClass if it exists
-#   command: kubectl delete storageclass donghorn-nfs
-#   when: sc_exists.stdout != ''
-#   run_once: true
+- name: Create Talos worker configuration
+  ansible.builtin.template:
+    src: worker.yaml.j2
+    dest: /tmp/talos-config/worker.yaml
+  vars:
+    talos_image: "factory.talos.dev/installer/{{ talos_image_id.json.id }}:{{ talos_version }}"
+  delegate_to: localhost
 
-# - name: Create StorageClass for Longhorn with NFS
-#   template:
-#     src: "longhorn-storageclass-nfs.yaml.j2"
-#     dest: "/tmp/k3s/longhorn-storageclass.yaml"
-#     owner: "{{ ansible_user_id }}"
-#     mode: 0755
-#   when: use_external_nfs_storage
-#   run_once: true
+- name: Apply Talos configurations
+  include_tasks: apply_talos_config.yml
 
-# - name: Apply the Longhorn StorageClass with NFS
-#   command: >
-#     k3s kubectl apply -f /tmp/k3s/longhorn-storageclass.yaml
-#   when: use_external_nfs_storage
-#   register: longhorn_storageclass_result
-#   changed_when: false
-#   run_once: true
-#   until: longhorn_storageclass_result.rc == 0
-#   retries: 5
+# Then deploy Longhorn
+- name: Create longhorn-system namespace with security labels
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: longhorn-system
+        labels:
+          pod-security.kubernetes.io/enforce: privileged
+          pod-security.kubernetes.io/audit: privileged
+          pod-security.kubernetes.io/warn: privileged
+  delegate_to: localhost
 
+- name: Wait for system extensions to be ready
+  ansible.builtin.command:
+    cmd: "talosctl -n {{ item }} get extensions -o yaml"
+  register: extensions_status
+  until: >
+    'iscsi-tools' in extensions_status.stdout and
+    'util-linux-tools' in extensions_status.stdout
+  retries: 30
+  delay: 10
+  with_items: "{{ groups['k3s_cluster'] }}"
+  delegate_to: localhost
 
-- name: Wait for Longhorn components to be ready
-  shell: >
-    kubectl get pods --namespace longhorn-system --no-headers | grep -v "Running" || true
-  register: longhorn_pods_not_running
+- name: Deploy Longhorn
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    src: https://raw.githubusercontent.com/longhorn/longhorn/v1.6.2/deploy/longhorn.yaml
+    state: present
+  register: longhorn_deployment
+  delegate_to: localhost
+
+- name: Wait for Longhorn pods to be ready
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Pod
+    namespace: longhorn-system
+    wait: yes
+    wait_timeout: 600
+    wait_condition:
+      type: Ready
+      status: true
+  register: longhorn_pods
+  delegate_to: localhost
   retries: 40
   delay: 10
-  until: longhorn_pods_not_running.stdout == ""
-  changed_when: false
-  run_once: true
+  until: longhorn_pods.resources | length > 0 and (longhorn_pods.resources | map(attribute='status.phase') | list | unique == ['Running'])
 
-- name: Create Ingress resource for Longhorn UI
-  template:
-    src: "longhorn-setup-template.yaml.j2"
-    dest: "/tmp/k3s/longhorn-ingress.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
+- name: Deploy Longhorn UI Ingress and Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: longhorn-ui
+        namespace: longhorn-system
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+        - host: "longhorn.{{ nginx_ingress_hostname }}"
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: longhorn-frontend
+                  port:
+                    number: 8050
+  delegate_to: localhost
 
-- name: Apply Longhorn Ingress resource
-  command: >
-    k3s kubectl apply -f /tmp/k3s/longhorn-ingress.yaml
-  register: longhorn_ingress_apply_result
-  changed_when: false
-  run_once: true
-  until: longhorn_ingress_apply_result.rc == 0
-  retries: 5
+- name: Deploy Longhorn Frontend Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: longhorn-frontend
+        namespace: longhorn-system
+      spec:
+        ports:
+        - protocol: TCP
+          port: 8050
+          targetPort: 8000
+        selector:
+          app: longhorn-ui
+  delegate_to: localhost
 
 - name: Add tolerations to Longhorn deployments
-  shell: |
-    k3s kubectl -n longhorn-system patch deployment {{ item }} --patch '
-    spec:
-      template:
-        spec:
-          tolerations:
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    namespace: longhorn-system
+    kind: Deployment
+    name: "{{ item }}"
+    definition:
+      spec:
+        template:
+          spec:
+            tolerations:
             - key: "node.kubernetes.io/unreachable"
               operator: "Exists"
               effect: "NoExecute"
@@ -101,7 +157,7 @@
               operator: "Exists"
               effect: "NoExecute"
               tolerationSeconds: 15
-    '
+    merge_type: strategic-merge
   loop:
     - csi-attacher
     - csi-provisioner
@@ -109,4 +165,4 @@
     - csi-snapshotter
     - longhorn-driver-deployer
     - longhorn-ui
-  run_once: true
+  delegate_to: localhost

@@ -1,45 +1,40 @@
 ---
-- name: Deploy calico
-  include_tasks: calico.yml
-  tags: calico
-  when: calico_iface is defined and cilium_iface is not defined
+# - name: Deploy calico
+#   include_tasks: calico.yml
+#   tags: calico
+#   when: calico_iface is defined and cilium_iface is not defined
 
-- name: Deploy cilium
-  include_tasks: cilium.yml
-  tags: cilium
-  when: cilium_iface is defined
+# - name: Deploy cilium
+#   include_tasks: cilium.yml
+#   tags: cilium
+#   when: cilium_iface is defined
 
-- name: Pause for 10 seconds
-  pause:
-    seconds: 1
-  delegate_to: localhost
+# - name: Pause for 10 seconds
+#   pause:
+#     seconds: 1
+#   delegate_to: localhost
 
 - name: Deploy metallb pool
   include_tasks: metallb.yml
   tags: metallb
   when: kube_vip_lb_ip_range is not defined and (not cilium_bgp or cilium_iface is not defined)
 
-- name: Deploy Longhorn
-  include_tasks: longhorn.yml
-  tags: longhorn
+# - name: Deploy Longhorn
+#   include_tasks: longhorn.yml
+#   tags: longhorn
+
+- name: Deploy Rook-ceph
+  include_tasks: rook.yml
+  tags: rook
 
 - name: Deploy Traefik
   include_tasks: traefik.yml
   tags: traefik
 
-- name: Deploy gh actions
-  include_tasks: gh-action-setup.yml
-  tags: gh-actions
+# - name: Deploy Rancher
+#   include_tasks: rancher.yml
+#   tags: rancher
 
-- name: Deploy Rancher
-  include_tasks: rancher.yml
-  tags: rancher
-
-- name: Deploy log-stack
-  include_tasks: log-stack.yml
-  tags: log-stack
-
-- name: Remove tmp directory used for manifests
-  file:
-    path: /tmp/k3s
-    state: absent
+# - name: Deploy log-stack
+#   include_tasks: log-stack.yml
+#   tags: log-stack

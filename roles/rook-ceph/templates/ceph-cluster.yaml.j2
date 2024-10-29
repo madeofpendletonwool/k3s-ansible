@@ -1,0 +1,95 @@
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: rook-ceph
+spec:
+  dataDirHostPath: /var/lib/rook
+  cephVersion:
+    image: quay.io/ceph/ceph:v19.2.0
+  mon:
+    count: {{ mon_count | int }}
+    allowMultiplePerNode: false
+  mgr:
+    count: 1
+  dashboard:
+    enabled: true
+    port: 7000
+    ssl: false
+  monitoring:
+    enabled: false
+  network:
+    provider: host
+  storage:
+    useAllNodes: false
+    useAllDevices: false
+    nodes: {{ storage_node_configs | to_json }}
+  placement:
+    all:
+      tolerations:
+        - operator: Exists
+    mon:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: topology.kubernetes.io/zone
+                  operator: In
+                  values:
+                    - onsite
+    mgr:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: topology.kubernetes.io/zone
+                  operator: In
+                  values:
+                    - onsite
+    osd:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: topology.kubernetes.io/zone
+                  operator: In
+                  values:
+                    - onsite
+  csi:
+    enableCSIHostNetwork: true
+    provisioner:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: topology.kubernetes.io/zone
+                  operator: In
+                  values:
+                    - onsite
+      tolerations:
+        - operator: Exists
+    plugin:
+      tolerations:
+        - operator: Exists
+  resources:
+    mgr:
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+      requests:
+        cpu: "100m"
+        memory: "512Mi"
+    mon:
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+    osd:
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+      requests:
+        cpu: "250m"
+        memory: "1Gi"

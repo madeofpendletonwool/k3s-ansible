@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik-deployment
+  namespace: ingress-traefik
+  labels:
+    app: traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      hostNetwork: true
+      serviceAccountName: traefik-account
+      terminationGracePeriodSeconds: 60  # Give pods time to terminate gracefully
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: traefik
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - traefik
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: traefik
+          image: traefik:v3.1
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10 && /usr/local/bin/traefik stop"]
+          ports:
+            - name: web
+              containerPort: 80
+            - name: websecure
+              containerPort: 443
+          args:
+            - --providers.kubernetesIngress
+            - --providers.kubernetesCRD
+            - --entryPoints.traefik.address=:8080
+            - --api.dashboard=true
+            - --api.insecure=true
+            - --ping=true
+            - --entryPoints.web.address=:80
+            - --entryPoints.websecure.address=:443
+            - --certificatesresolvers.default.acme.tlschallenge
+            - --certificatesResolvers.default.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+            - --certificatesResolvers.default.acme.email={{ traefik_acme_email }}
+            - --certificatesResolvers.default.acme.storage=/acme/acme.json
+            - --log.level=DEBUG
+          volumeMounts:
+            - name: acme
+              mountPath: /acme
+      volumes:
+        - name: acme
+          persistentVolumeClaim:
+            claimName: traefik-acme-pvc

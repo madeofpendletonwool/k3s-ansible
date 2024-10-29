@@ -1,0 +1,281 @@
+---
+# roles/rook_ceph_deployment/tasks/main.yml
+
+# roles/rook_ceph_deployment/tasks/main.yml
+- name: Get node information from cluster
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Node
+  register: k8s_nodes
+  delegate_to: localhost
+
+- name: Filter Ready nodes only
+  ansible.builtin.set_fact:
+    ready_status: >-
+      {{
+        k8s_nodes.resources |
+        map(attribute='status.conditions') |
+        map('selectattr', 'type', 'equalto', 'Ready') |
+        map('selectattr', 'status', 'equalto', 'True') |
+        list
+      }}
+    storage_nodes: >-
+      {{
+        k8s_nodes.resources |
+        select('contains', 'metadata') |
+        selectattr('metadata.name', 'match', '^talos-.*') |
+        map(attribute='metadata.name') |
+        list
+      }}
+
+- name: Debug Ready nodes
+  ansible.builtin.debug:
+    var: storage_nodes
+
+- name: Calculate mon count as integer
+  ansible.builtin.set_fact:
+    mon_count: "{{ [3, storage_nodes | length] | min | int }}"
+
+
+- name: Add pod security labels to namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: rook-ceph
+        labels:
+          pod-security.kubernetes.io/enforce: privileged
+          pod-security.kubernetes.io/warn: privileged
+          pod-security.kubernetes.io/audit: privileged
+
+- name: Add Rook Helm repository
+  kubernetes.core.helm_repository:
+    name: rook-release
+    repo_url: https://charts.rook.io/release
+  delegate_to: localhost
+
+- name: Install Rook Operator via Helm
+  kubernetes.core.helm:
+    name: rook-ceph
+    namespace: rook-ceph
+    chart_ref: rook-release/rook-ceph
+    create_namespace: true
+    wait: true
+    kubeconfig: "{{ kubeconfig }}"
+    values:
+      enableDiscoveryDaemon: true
+      csi:
+        enableCSIHostNetwork: true
+        pluginTolerations:
+          - operator: "Exists"
+        # Set provisioner replicas to 1
+        provisionerReplicas: 1
+      tolerations:
+        - operator: "Exists"
+  delegate_to: localhost
+
+- name: Wait for Rook operator
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Pod
+    namespace: rook-ceph
+    label_selectors:
+      - app=rook-ceph-operator
+    wait: yes
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: true
+
+- name: Create node configurations
+  ansible.builtin.set_fact:
+    storage_node_configs: "{{ node_configs }}"
+  vars:
+    node_configs: >-
+      [
+        {% for node in storage_nodes %}
+        {
+          "name": "{{ node }}",
+          "devices": [{"name": "/dev/sdb"}]
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+
+- name: Debug node configurations
+  ansible.builtin.debug:
+    var: storage_node_configs
+
+- name: Verify configuration
+  ansible.builtin.debug:
+    msg:
+      - "Mon count (type): {{ mon_count | type_debug }}"
+      - "Mon count (value): {{ mon_count }}"
+      - "Storage nodes config (type): {{ storage_node_configs | type_debug }}"
+      - "Storage nodes config (value): {{ storage_node_configs | to_nice_json }}"
+
+- name: Create Rook-Ceph cluster configuration
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', 'ceph-cluster.yaml.j2') | from_yaml }}"
+
+# - name: Create Rook-Ceph cluster configuration
+#   kubernetes.core.k8s:
+#     kubeconfig: "{{ kubeconfig }}"
+#     state: present
+#     definition:
+#       apiVersion: ceph.rook.io/v1
+#       kind: CephCluster
+#       metadata:
+#         name: rook-ceph
+#         namespace: rook-ceph
+#       spec:
+#         dataDirHostPath: /var/lib/rook
+#         cephVersion:
+#           image: quay.io/ceph/ceph:v19.2.0
+#         mon:
+#           count: {{ mon_count }}
+#           allowMultiplePerNode: false
+#         mgr:
+#           count: 1
+#         dashboard:
+#           enabled: true
+#           port: 7000
+#           ssl: false
+#         monitoring:
+#           enabled: false
+#         network:
+#           provider: host
+#         storage:
+#           useAllNodes: false
+#           useAllDevices: false
+#           nodes: "{{ storage_node_configs | list }}"
+#         placement:
+#           all:
+#             tolerations:
+#               - operator: Exists
+#         resources:
+#           mgr:
+#             limits:
+#               cpu: "500m"
+#               memory: "1Gi"
+#             requests:
+#               cpu: "100m"
+#               memory: "512Mi"
+#           mon:
+#             limits:
+#               cpu: "1"
+#               memory: "2Gi"
+#             requests:
+#               cpu: "500m"
+#               memory: "1Gi"
+#           osd:
+#             limits:
+#               cpu: "2"
+#               memory: "4Gi"
+#             requests:
+#               cpu: "500m"
+#               memory: "2Gi"
+
+- name: Wait for Rook pods to be ready
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Pod
+    namespace: rook-ceph
+    label_selectors:
+      - app in (csi-cephfsplugin-provisioner, csi-rbdplugin-provisioner, rook-ceph-operator)
+    wait: yes
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
+  register: rook_pods
+
+# - name: Wait for Rook CSI secrets to be created
+#   kubernetes.core.k8s_info:
+#     kubeconfig: "{{ kubeconfig }}"
+#     kind: Secret
+#     namespace: rook-ceph
+#     name: "{{ item }}"
+#   register: csi_secrets
+#   until: csi_secrets.resources | length > 0
+#   retries: 30
+#   delay: 10
+#   loop:
+#     - rook-csi-rbd-provisioner
+#     - rook-csi-rbd-node
+#   delegate_to: localhost
+
+- name: Create CephBlockPool
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: ceph.rook.io/v1
+      kind: CephBlockPool
+      metadata:
+        name: replicapool
+        namespace: rook-ceph
+      spec:
+        failureDomain: osd  # Changed from host
+        replicated:
+          size: 2  # Reduced from 2
+          requireSafeReplicaSize: false
+        statusCheck:
+          mirror: {}
+
+# Then your existing storage class creation task
+
+- name: Create storage classes
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: rook-ceph-block
+        annotations:
+          storageclass.kubernetes.io/is-default-class: "true"  # Make this the default storage class
+      provisioner: rook-ceph.rbd.csi.ceph.com
+      parameters:
+        clusterID: rook-ceph
+        pool: replicapool
+        imageFormat: "2"
+        imageFeatures: layering
+        csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+        csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+        csi.storage.k8s.io/fstype: ext4
+      allowVolumeExpansion: true
+      reclaimPolicy: Delete
+
+- name: Rook takes a HOT min to deploy
+  ansible.builtin.pause:
+    seconds: 160
+
+
+- name: Create Ceph Dashboard LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: rook-ceph-mgr-dashboard-lb
+        namespace: rook-ceph
+      spec:
+        type: LoadBalancer
+        ports:
+          - port: 7000
+            targetPort: 7000
+            protocol: TCP
+        selector:
+          app: rook-ceph-mgr

@@ -1,0 +1,9 @@
+---
+- name: Deploy Talos Servers
+  hosts: proxmox
+  gather_facts: false
+  become: true
+  environment: "{{ proxy_env | default({}) }}"
+  roles:
+    - role: proxmox-talos
+      when: proxmox_talos_servers
