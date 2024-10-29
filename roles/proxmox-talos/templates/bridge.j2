@@ -1,0 +1,17 @@
+auto vmbr0
+iface vmbr0 inet static
+    address {{ proxmox_ip }}/24
+    bridge_ports {{ physical_interface }}
+    bridge_stp off
+    bridge_fd 0
+    bridge_vlan_aware yes
+    # Enable NAT for VMs to access 10.0.0.0/24
+    post-up iptables -t nat -A POSTROUTING -s '192.168.1.0/24' -o tailscale0 -j MASQUERADE
+    post-up iptables -A FORWARD -i vmbr0 -o tailscale0 -j ACCEPT
+    post-up iptables -A FORWARD -i tailscale0 -o vmbr0 -j ACCEPT
+    # Add route for 10.0.0.0/24
+    post-up ip route add 10.0.0.0/24 via 100.116.130.107 dev tailscale0
+    # Clean up rules on bridge down
+    post-down iptables -t nat -D POSTROUTING -s '192.168.1.0/24' -o tailscale0 -j MASQUERADE
+    post-down iptables -D FORWARD -i vmbr0 -o tailscale0 -j ACCEPT
+    post-down iptables -D FORWARD -i tailscale0 -o vmbr0 -j ACCEPTf

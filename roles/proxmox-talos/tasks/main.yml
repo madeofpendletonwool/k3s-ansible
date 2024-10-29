@@ -1,0 +1,238 @@
+---
+- name: Install proxmoxer
+  ansible.builtin.apt:
+    name: python3-proxmoxer
+    state: present
+
+- name: Ensure pveum command is available
+  ansible.builtin.command: which pveum
+  changed_when: false
+  check_mode: false
+
+- name: Check if API user exists
+  ansible.builtin.command: pveum user list
+  register: user_list
+  changed_when: false
+  check_mode: false
+
+- name: Create API user (PVE realm)
+  ansible.builtin.command: pveum user add {{ proxmox_api_user }}@pve --password {{ proxmox_api_password }}
+  when: proxmox_api_user + '@pve' not in user_list.stdout
+
+- name: Assign PVEAdmin role to API user
+  ansible.builtin.command: pveum aclmod / -user {{ proxmox_api_user }}@pve -role PVEAdmin
+  when: proxmox_api_user + '@pve' not in user_list.stdout
+
+# Token management on a single host
+- name: Handle token creation on primary Proxmox host
+  # when: inventory_hostname == groups['proxmox'][0]
+  block:
+    - name: Check if API token exists
+      ansible.builtin.command: pveum user token list {{ proxmox_api_user }}@pve
+      register: token_list
+      changed_when: false
+      check_mode: false
+
+    - name: Debug token list
+      ansible.builtin.debug:
+        var: token_list.stdout_lines
+
+    - name: Remove existing API token if it exists
+      ansible.builtin.command: pveum user token remove {{ proxmox_api_user }}@pve {{ proxmox_api_token_id }}
+      when: proxmox_api_token_id in token_list.stdout
+      ignore_errors: true
+
+    - name: Create new API token
+      ansible.builtin.command: pveum user token add {{ proxmox_api_user }}@pve {{ proxmox_api_token_id }} --privsep 0
+      register: token_result
+
+    - name: Debug raw token result
+      ansible.builtin.debug:
+        var: token_result.stdout_lines
+        
+    - name: Save raw token output
+      ansible.builtin.copy:
+        content: "{{ token_result.stdout }}"
+        dest: "/tmp/raw_token_output"
+      delegate_to: localhost
+
+    - name: Read raw token output
+      ansible.builtin.command: cat /tmp/raw_token_output
+      register: raw_token
+      delegate_to: localhost
+
+    - name: Extract token secret
+      ansible.builtin.set_fact:
+        proxmox_api_token_secret: "{{ token_result.stdout_lines[7] | regex_replace('^.*│\\s*value\\s*│\\s*([a-f0-9-]+)\\s*│.*$', '\\1') }}"
+
+    - name: Debug token (remove in production)
+      ansible.builtin.debug:
+        msg: "Extracted token: {{ proxmox_api_token_secret }}"
+
+
+    - name: Debug token
+      ansible.builtin.debug:
+        msg: "Token created for {{ inventory_hostname }}: {{ proxmox_api_token_secret }}"
+
+
+    - name: Debug extracted token
+      ansible.builtin.debug:
+        msg: 
+          - "Raw token output: {{ raw_token.stdout }}"
+          - "Extracted token: {{ proxmox_api_token_secret }}"
+      delegate_to: localhost
+
+# # Store token on control node
+# - name: Set token fact globally
+#   ansible.builtin.set_fact:
+#     proxmox_api_token_secret: "{{ hostvars[groups['proxmox'][0]]['proxmox_api_token_secret'] }}"
+
+# - name: Store token in file
+#   ansible.builtin.copy:
+#     content: "{{ proxmox_api_token_secret }}"
+#     dest: "{{ playbook_dir }}/proxmox_token_secret"
+#     mode: '0600'
+#   delegate_to: localhost
+#   run_once: true
+
+# - name: Verify token is available
+#   ansible.builtin.fail:
+#     msg: "API token secret is not available. Please ensure the token is created successfully."
+#   when: proxmox_api_token_secret is not defined or proxmox_api_token_secret == ""
+#   delegate_to: localhost
+#   run_once: true
+
+
+# # Store token on control node
+# - name: Store token secret on control node
+#   block:
+#     - name: Set token fact on control node
+#       ansible.builtin.set_fact:
+#         proxmox_api_token_secret: "{{ hostvars[groups['proxmox'][0]]['proxmox_api_token_secret'] }}"
+
+#     - name: Store token in file
+#       ansible.builtin.copy:
+#         content: "{{ proxmox_api_token_secret }}"
+#         dest: "{{ playbook_dir }}/proxmox_token_secret"
+#         mode: '0600'
+#       no_log: true
+
+#     - name: Verify token is available
+#       ansible.builtin.fail:
+#         msg: "API token secret is not available. Please ensure the token is created successfully."
+#       when: proxmox_api_token_secret is not defined or proxmox_api_token_secret == ""
+#   delegate_to: localhost
+#   run_once: true
+
+- name: Check if Talos ISO exists
+  ansible.builtin.stat:
+    path: "/var/lib/vz/template/iso/talos-{{ talos_version }}-amd64.iso"
+  register: talos_iso
+  become: true
+
+- name: Create ISO directory if it doesn't exist
+  ansible.builtin.file:
+    path: "/var/lib/vz/template/iso"
+    state: directory
+    mode: '0755'
+  become: true
+  when: not talos_iso.stat.exists
+
+- name: Download Talos ISO
+  ansible.builtin.get_url:
+    url: "https://factory.talos.dev/image/6e810eb45767cfabcdb7a45e389eee803045af7a9467faebde5c91164861883a/v1.8.1/nocloud-amd64.iso"
+    dest: "/var/lib/vz/template/iso/talos-{{ talos_version }}-amd64.iso"
+    mode: '0644'
+    force: false
+    timeout: 60  # Increase timeout to 60 seconds
+  become: true
+  when: not talos_iso.stat.exists
+  register: download_result
+
+- name: Display download status
+  ansible.builtin.debug:
+    msg: "ISO was {% if download_result.changed %}downloaded{% else %}already present{% endif %}"
+  when: not talos_iso.stat.exists
+
+
+- name: Create Talos control plane VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id | regex_replace('[^a-zA-Z0-9_-]', '') }}"
+    api_token_secret: "{{ proxmox_api_token_secret | regex_replace('[^a-zA-Z0-9_-]', '') }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-control-plane-{{ 'offsite' if inventory_hostname in groups['proxmox_offsite'] else 'onsite' }}"
+    node: "{{ proxmox_node_name }}"
+    cores: 2
+    sockets: 1
+    memory: 4096
+    cpu: "host"
+    sata:
+      sata0: "{{ proxmox_data_store }}:32,format=raw"
+      sata1: "{{ proxmox_data_store }}:50,format=raw"
+    net:
+      net0: "virtio,bridge={{ 'vmbr1' if inventory_hostname in groups['proxmox_offsite'] else 'vmbr0' }}"
+    ostype: "l26"
+    ide:
+      ide2: "local:iso/talos-{{ talos_version }}-amd64.iso,media=cdrom"
+    onboot: yes
+    state: present
+    validate_certs: false
+  when: inventory_hostname == groups['proxmox_onsite'][0] or inventory_hostname in groups['proxmox_offsite']
+
+- name: Create Talos worker VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-worker-{{ inventory_hostname.split('.')[-1] }}"
+    node: "{{ proxmox_node_name }}"
+    cores: 2
+    sockets: 1
+    memory: 8096
+    cpu: "host"
+    sata:
+      sata0: "{{ proxmox_data_store }}:32,format=raw"
+      sata1: "{{ proxmox_data_store }}:100,format=raw"  # Additional disk for Rook-Ceph
+    net:
+      net0: "virtio,bridge={{ 'vmbr1' if inventory_hostname in groups['proxmox_offsite'] else 'vmbr0' }}"
+    ostype: "l26"
+    ide:
+      ide2: "local:iso/talos-{{ talos_version }}-amd64.iso,media=cdrom"
+    onboot: yes
+    state: present
+    validate_certs: false
+  when: inventory_hostname in groups['proxmox']
+
+- name: Sleep before starting VMs
+  ansible.builtin.pause:
+    seconds: 5
+  delegate_to: localhost
+  run_once: true
+
+- name: Start Talos control plane VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id | regex_replace('[^a-zA-Z0-9_-]', '') }}"
+    api_token_secret: "{{ proxmox_api_token_secret | regex_replace('[^a-zA-Z0-9_-]', '') }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-control-plane-{{ 'offsite' if inventory_hostname in groups['proxmox_offsite'] else 'onsite' }}"
+    node: "{{ proxmox_node_name }}"
+    state: started
+  when: inventory_hostname == groups['proxmox_onsite'][0] or inventory_hostname in groups['proxmox_offsite']
+  register: start_control_plane
+  until: start_control_plane is not failed
+  retries: 5
+  delay: 10
+  
+- name: Start all Talos worker VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-worker-{{ inventory_hostname.split('.')[-1] }}"
+    node: "{{ proxmox_node_name }}"
+    state: started
+  when: inventory_hostname in groups['proxmox']

@@ -1,0 +1,79 @@
+---
+# this is the user that has ssh access to these machines
+ansible_user: myuser
+systemd_dir: /etc/systemd/system
+
+# Set your timezone
+system_timezone: "America/Chicago"
+
+# if using calico or cilium, you may specify the cluster pod cidr pool
+cluster_cidr: "10.52.0.0/16"
+
+# apiserver_endpoint is virtual ip-address which will be configured on each master
+apiserver_endpoint: "10.0.0.30"
+
+# k3s_token is required  masters can talk together securely
+# this token should be alpha numeric only
+k3s_token: "myk3stoken"
+
+# Disable the taint manually by setting: k3s_master_taint = false
+k3s_master_taint: "{{ true if groups['node'] | default([]) | length >= 1 else false }}"
+
+# metallb type frr or native
+metal_lb_type: "native"
+
+# metallb mode layer2 or bgp
+metal_lb_mode: "layer2"
+
+# image tag for metal lb
+metal_lb_speaker_tag_version: "v0.14.8"
+metal_lb_controller_tag_version: "v0.14.8"
+
+# metallb ip range for load balancer
+metal_lb_ip_range: "10.0.0.40-10.0.0.70"
+
+# Enable to deploy talos onto proxmox and use that as your nodes
+proxmox_lxc_ssh_user: 'root'
+proxmox_talos_servers: true
+proxmox_api_user: "ansible"  # This will be created as ansible@pve
+proxmox_api_password: "myproxpass"  # Store this in an Ansible vault
+proxmox_api_token_id: "ansible-token"
+talos_version: 1.8.1
+
+tailscale_auth_key: "mytailscalekey"
+k8s_service_cidr: "10.96.0.0/12"
+
+
+kube_vip_ip: 1.2.3.4
+
+traefik_acme_email: email@email.com
+
+kubeconfig: "/tmp/talos-kubeconfig"
+
+nginx_ingress_hostname: mydomain.com
+
+grafana_admin_pass: admin
+
+ntfy_custom_url: https://ntfy.mydomain.com/mysubscription
+# Ignore ip and path if the nfs_storage option is false
+use_external_nfs_storage: false
+external_storage_ip: '10.202.41.71'
+
+# NFS Server Config
+nfs_server: "1.2.3.4"
+nfs_app_data_path: "/path/to/appdata"
+nfs_storage_path: "/path/to/nfsshare"
+nfs_storageclass_name: "main-nfs"
+
+# Navidrome Server Config
+nfs_music_path: "/path/to/music"
+nfs_nav_data_path: "/path/to/database"
+navidrome_pvc_name: "navidrome-data-pvc-1"
+
+# immich server config
+
+immich_release_name: immich
+immich_namespace: immich
+immich_domain: immich.mydomain.com
+immich_chart_version: v1.115.0
+nfs_immich_library_path: "/path/to/photos"

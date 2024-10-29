@@ -1,0 +1,286 @@
+---
+- name: Wait for Talos API on all control planes
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 50000
+    timeout: 600
+  loop: "{{ groups['master'] }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure Talos config directory exists
+  ansible.builtin.file:
+    path: "/tmp/talos-config"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Remove old Talos configurations if they exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "/tmp/talos-config/controlplane.yaml"
+    - "/tmp/talos-config/worker.yaml"
+    - "/tmp/talos-config/talosconfig"
+    - "/tmp/talos-kubeconfig"
+  delegate_to: localhost
+  run_once: true
+
+- name: Create extensions config patch
+  ansible.builtin.copy:
+    dest: "/tmp/talos-config/extensions-patch.yaml"
+    content: |
+      machine:
+        install:
+          extensions:
+            - image: ghcr.io/siderolabs/util-linux-tools:2.40.2
+            - image: ghcr.io/siderolabs/tailscale:1.76.0
+
+# Optional: Create Tailscale config if you want to use it
+- name: Create Tailscale configuration
+  ansible.builtin.copy:
+    dest: "/tmp/talos-config/tailscale-config.yaml"
+    content: |
+      apiVersion: v1alpha1
+      kind: ExtensionServiceConfig
+      name: tailscale
+      environment:
+        - TS_AUTHKEY={{ tailscale_auth_key | default('') }}
+        - TS_ROUTES={{ k8s_service_cidr | default('10.96.0.0/12') }}
+        - TS_EXTRA_ARGS=--accept-routes
+  delegate_to: localhost
+  run_once: true
+  when: tailscale_auth_key is defined
+
+- name: Create control plane VIP patch
+  ansible.builtin.copy:
+    dest: "/tmp/talos-config/cp.patch.yaml"
+    content: |
+      machine:
+        network:
+          interfaces:
+            - interface: eth0
+              dhcp: true
+              vip:
+                ip: "{{ kube_vip_ip }}"
+      cluster:
+        discovery:
+          enabled: true
+        etcd:
+          advertisedSubnets:
+            - "10.0.0.0/24"
+            - "10.1.0.0/24"
+          listenSubnets:
+            - "10.0.0.0/24"
+            - "10.1.0.0/24"
+
+
+- name: Generate base Talos configurations
+  ansible.builtin.command:
+    cmd: "talosctl gen config talos-proxmox-cluster https://{{ kube_vip_ip }}:6443 --config-patch @/tmp/talos-config/extensions-patch.yaml --config-patch-control-plane @/tmp/talos-config/cp.patch.yaml --with-examples=false --with-docs=false --output-dir /tmp/talos-config"
+  delegate_to: localhost
+  run_once: true
+
+
+- name: Apply control plane configuration to first node
+  ansible.builtin.command:
+    cmd: "talosctl apply-config --insecure --nodes {{ groups['master'][0] }} --file /tmp/talos-config/controlplane.yaml"
+  register: apply_control_plane_first
+  failed_when:
+    - apply_control_plane_first.rc != 0
+    - "'certificate required' not in apply_control_plane_first.stderr"
+    - "'already installed' not in apply_control_plane_first.stderr"
+  delegate_to: localhost
+  run_once: true
+
+- name: Wait for first control plane to stabilize
+  ansible.builtin.pause:
+    seconds: 30
+
+- name: Apply control plane configuration to additional nodes
+  ansible.builtin.command:
+    cmd: "talosctl apply-config --insecure --nodes {{ item }} --file /tmp/talos-config/controlplane.yaml"
+  register: apply_control_plane
+  failed_when:
+    - apply_control_plane.rc != 0
+    - "'certificate required' not in apply_control_plane.stderr"
+    - "'already installed' not in apply_control_plane.stderr"
+  loop: "{{ groups['master'][1:] }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Wait for worker nodes Talos API
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 50000
+    timeout: 600
+  loop: "{{ groups['node'] }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Apply worker configurations
+  ansible.builtin.command:
+    cmd: "talosctl apply-config --insecure --nodes {{ item }} --file /tmp/talos-config/worker.yaml"
+  register: apply_worker
+  failed_when:
+    - apply_worker.rc != 0
+    - "'certificate required' not in apply_worker.stderr"
+    - "'already installed' not in apply_worker.stderr"
+  loop: "{{ groups['node'] }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure .talos directory exists
+  ansible.builtin.file:
+    path: "{{ lookup('env', 'HOME') }}/.talos"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy new talosconfig
+  ansible.builtin.copy:
+    src: "/tmp/talos-config/talosconfig"
+    dest: "{{ lookup('env', 'HOME') }}/.talos/config"
+    mode: '0600'
+    force: yes
+  delegate_to: localhost
+  run_once: true
+
+- name: Set talosctl endpoint
+  ansible.builtin.command:
+    cmd: talosctl config endpoint {{ groups['master'][0] }}
+  changed_when: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Set talosctl nodes
+  ansible.builtin.command:
+    cmd: talosctl config node {{ groups['master'][0] }}
+  changed_when: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Wait for all Talos APIs to stabilize
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 50000
+    timeout: 300
+  with_items: 
+    - "{{ groups['master'] }}"
+    - "{{ groups['node'] }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Check if etcd is already bootstrapped
+  ansible.builtin.command:
+    cmd: "talosctl --nodes {{ groups['master'][0] }} service etcd status"
+  register: etcd_status
+  ignore_errors: yes
+  changed_when: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Bootstrap etcd from onsite control plane
+  ansible.builtin.command:
+    cmd: "talosctl --nodes {{ groups['master'][0] }} bootstrap"
+  register: bootstrap_result
+  failed_when:
+    - bootstrap_result.rc != 0
+    - "'etcd is already bootstrapped' not in bootstrap_result.stderr"
+  delegate_to: localhost
+  run_once: true
+
+
+- name: Wait for etcd to be ready
+  ansible.builtin.pause:
+    seconds: 15
+  when: bootstrap_result.changed
+  delegate_to: localhost
+  run_once: true
+
+- name: Retrieve kubeconfig
+  ansible.builtin.command:
+    cmd: "talosctl kubeconfig /tmp/talos-kubeconfig"
+  delegate_to: localhost
+  run_once: true
+
+- name: Wait enough time for the vip to be working
+  ansible.builtin.pause:
+    seconds: 45
+  when: bootstrap_result.changed
+  delegate_to: localhost
+  run_once: true
+
+- name: Get node information
+  kubernetes.core.k8s_info:
+    kind: Node
+    kubeconfig: "{{ kubeconfig }}"
+  register: node_info
+  delegate_to: localhost
+
+- name: Debug node info
+  ansible.builtin.debug:
+    msg: "Found IP {{ item.status.addresses | selectattr('type', 'equalto', 'InternalIP') | map(attribute='address') | first }} for node {{ item.metadata.name }}"
+  loop: "{{ node_info.resources | selectattr('status.addresses', 'defined') | selectattr('status.addresses', 'ne', none) }}"
+
+- name: Create temp mapping of IPs to nodes
+  ansible.builtin.set_fact:
+    temp_mapping: "{{ temp_mapping | default({}) | combine({current_ip: item.metadata.name}) }}"
+  vars:
+    current_ip: "{{ item.status.addresses | selectattr('type', 'equalto', 'InternalIP') | map(attribute='address') | first }}"
+  loop: "{{ node_info.resources | selectattr('status.addresses', 'defined') | selectattr('status.addresses', 'ne', none) }}"
+
+- name: Debug temp mapping
+  ansible.builtin.debug:
+    var: temp_mapping
+
+- name: Label Talos nodes with location based on inventory groups
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Node
+      metadata:
+        name: "{{ temp_mapping[item] }}"
+        labels:
+          topology.kubernetes.io/zone: "{{ 'offsite' if item in groups['master_offsite'] + groups['node_offsite'] else 'onsite' }}"
+  loop: "{{ groups['master_onsite'] + groups['master_offsite'] + groups['node_onsite'] + groups['node_offsite'] }}"
+  when: temp_mapping[item] is defined
+
+- name: Clean up phantom nodes
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: absent
+    kind: Node
+    name: "{{ item.metadata.name }}"
+  loop: "{{ node_info.resources }}"
+  when: item.status.addresses is none
+  delegate_to: localhost
+
+- name: Ensure kube-system namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: /tmp/talos-kubeconfig
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: kube-system
+
+
+- name: Deploy MetalLB manifest
+  kubernetes.core.k8s:
+    definition: "{{ item }}"
+    kubeconfig: /tmp/talos-kubeconfig
+    state: present
+  loop: "{{ lookup('url', 'https://raw.githubusercontent.com/metallb/metallb/' + metal_lb_controller_tag_version + '/config/manifests/metallb-native.yaml', split_lines=False) | from_yaml_all | list }}"
+  when: 
+    - item is not none
+    - deploy_metallb | default(true)
+    - kube_vip_lb_ip_range is not defined
+    - not (cilium_bgp | default(false))
+    - cilium_iface is not defined
