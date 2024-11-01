@@ -1,0 +1,115 @@
+# roles/freshrss/tasks/main.yml
+---
+- name: Create freshrss namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: freshrss
+
+- name: Create PVC for freshrss config
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: freshrss-config-pvc
+        namespace: freshrss
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy freshrss
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: freshrss
+        namespace: freshrss
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: freshrss
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: freshrss
+          spec:
+            containers:
+              - name: freshrss
+                image: lscr.io/linuxserver/freshrss:latest
+                env:
+                  - name: TZ
+                    value: "America/Chicago"
+                  - name: PUID
+                    value: "1000"
+                  - name: PGID
+                    value: "1000"
+                ports:
+                  - containerPort: 80
+                    name: http
+                volumeMounts:
+                  - name: config
+                    mountPath: /config
+            volumes:
+              - name: config
+                persistentVolumeClaim:
+                  claimName: freshrss-config-pvc
+
+- name: Create freshrss service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: freshrss
+        namespace: freshrss
+      spec:
+        selector:
+          app: freshrss
+        ports:
+          - protocol: TCP
+            port: 80
+            targetPort: 80
+
+- name: Create freshrss ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: freshrss-ingress
+        namespace: freshrss
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: "rss.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: freshrss
+                      port:
+                        number: 80

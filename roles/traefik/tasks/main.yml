@@ -26,26 +26,6 @@
     - https://raw.githubusercontent.com/traefik/traefik/v3.1/docs/content/reference/dynamic-configuration/kubernetes-crd-rbac.yml
   delegate_to: localhost
 
-# - name: Create NFS StorageClass
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       kind: StorageClass
-#       apiVersion: storage.k8s.io/v1
-#       metadata:
-#         name: donghorn-nfs
-#       provisioner: nfs-client
-#       parameters:
-#         server: "{{ external_storage_ip }}"
-#         path: "{{ external_storage_path }}"
-#         readOnly: "false"
-#       reclaimPolicy: Retain
-#       mountOptions:
-#         - nfsvers=4.1
-#   when: use_external_nfs_storage | default(false)
-#   delegate_to: localhost
-
 - name: Create Traefik ACME PVC
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -116,76 +96,6 @@
     state: present
     definition: "{{ lookup('template', 'traefik-deployment.yaml.j2') | from_yaml }}"
   delegate_to: localhost
-# - name: Deploy Traefik Deployment
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: apps/v1
-#       kind: Deployment
-#       metadata:
-#         name: traefik-deployment
-#         namespace: ingress-traefik
-#         labels:
-#           app: traefik
-#       spec:
-#         replicas: "{{ traefik_replicas }}"
-#         selector:
-#           matchLabels:
-#             app: traefik
-#         template:
-#           metadata:
-#             labels:
-#               app: traefik
-#           spec:
-#             serviceAccountName: traefik-account
-#             topologySpreadConstraints:
-#               - maxSkew: 1
-#                 topologyKey: kubernetes.io/hostname
-#                 whenUnsatisfiable: DoNotSchedule
-#                 labelSelector:
-#                   matchLabels:
-#                     app: traefik
-#             affinity:
-#               podAntiAffinity:
-#                 preferredDuringSchedulingIgnoredDuringExecution:
-#                   - weight: 100
-#                     podAffinityTerm:
-#                       labelSelector:
-#                         matchExpressions:
-#                           - key: app
-#                             operator: In
-#                             values:
-#                               - traefik
-#                       topologyKey: kubernetes.io/hostname
-#             containers:
-#               - name: traefik
-#                 image: traefik:v3.1
-#                 args:
-#                   - --providers.kubernetesIngress
-#                   - --providers.kubernetesCRD
-#                   - --api.dashboard=true
-#                   - --api.insecure=true
-#                   - --entryPoints.web.address=:80
-#                   - --entryPoints.websecure.address=:443
-#                   - --certificatesresolvers.default.acme.tlschallenge
-#                   - --certificatesResolvers.default.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
-#                   - --certificatesResolvers.default.acme.email={{ traefik_acme_email }}
-#                   - --certificatesResolvers.default.acme.storage=/acme/acme.json
-#                   - --log.level=DEBUG
-#                 ports:
-#                   - name: web
-#                     containerPort: 80
-#                   - name: websecure
-#                     containerPort: 443
-#                 volumeMounts:
-#                   - name: acme
-#                     mountPath: /acme
-#             volumes:
-#               - name: acme
-#                 persistentVolumeClaim:
-#                   claimName: traefik-acme-pvc
-#   delegate_to: localhost
 
 - name: Deploy Traefik Services
   kubernetes.core.k8s:
@@ -219,11 +129,11 @@
           port: 443
   delegate_to: localhost
 
-- name: Wait for Traefik deployment to be ready
+- name: Wait for Traefik statefulset to be ready
   kubernetes.core.k8s_info:
     kubeconfig: "{{ kubeconfig }}"
     kind: Deployment
-    name: traefik-deployment
+    name: traefik
     namespace: ingress-traefik
     wait: yes
     wait_timeout: 300

@@ -1,0 +1,108 @@
+# roles/opodsync/tasks/main.yml
+---
+- name: Create opodsync namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: opodsync
+
+- name: Create PVC for opodsync data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: opodsync-data-pvc
+        namespace: opodsync
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy opodsync
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: opodsync
+        namespace: opodsync
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: opodsync
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: opodsync
+          spec:
+            containers:
+              - name: opodsync
+                image: ganeshlab/opodsync:latest
+                ports:
+                  - containerPort: 8080
+                    name: http
+                volumeMounts:
+                  - name: data
+                    mountPath: /var/www/server/data
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: opodsync-data-pvc
+
+- name: Create opodsync service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: opodsync
+        namespace: opodsync
+      spec:
+        selector:
+          app: opodsync
+        ports:
+          - protocol: TCP
+            port: 8080
+            targetPort: 8080
+
+- name: Create opodsync ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: opodsync-ingress
+        namespace: opodsync
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: "podcasts.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: opodsync
+                      port:
+                        number: 8080

@@ -1,0 +1,200 @@
+# roles/searxng/tasks/main.yml
+---
+- name: Create searxng namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: searxng
+
+- name: Create PVC for Redis data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: redis-data-pvc
+        namespace: searxng
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Create PVC for SearXNG config
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: searxng-config-pvc
+        namespace: searxng
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy Redis
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: redis
+        namespace: searxng
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: redis
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: redis
+          spec:
+            containers:
+              - name: redis
+                image: cgr.dev/chainguard/valkey:latest
+                args: ["--save", "30", "1", "--loglevel", "warning"]
+                securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+                    add:
+                      - SETGID
+                      - SETUID
+                      - DAC_OVERRIDE
+                volumeMounts:
+                  - name: data
+                    mountPath: /data
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: redis-data-pvc
+
+- name: Deploy SearXNG
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: searxng
+        namespace: searxng
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: searxng
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: searxng
+          spec:
+            containers:
+              - name: searxng
+                image: searxng/searxng:latest
+                securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+                    add:
+                      - CHOWN
+                      - SETGID
+                      - SETUID
+                env:
+                  - name: SEARXNG_BASE_URL
+                    value: "https://search.{{ nginx_ingress_hostname }}/"
+                volumeMounts:
+                  - name: config
+                    mountPath: /etc/searxng
+            volumes:
+              - name: config
+                persistentVolumeClaim:
+                  claimName: searxng-config-pvc
+
+- name: Create Redis Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: redis
+        namespace: searxng
+      spec:
+        selector:
+          app: redis
+        ports:
+          - protocol: TCP
+            port: 6379
+            targetPort: 6379
+
+- name: Create SearXNG Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: searxng
+        namespace: searxng
+      spec:
+        selector:
+          app: searxng
+        ports:
+          - protocol: TCP
+            port: 8080
+            targetPort: 8080
+
+- name: Create SearXNG Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: searxng-ingress
+        namespace: searxng
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: default
+      spec:
+        rules:
+          - host: "search.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: searxng
+                      port:
+                        number: 8080
+        tls:
+          - secretName: searxng-tls-cert
+            hosts:
+              - "search.{{ nginx_ingress_hostname }}"

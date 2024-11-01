@@ -4,13 +4,24 @@
     state: directory
     mode: '0755'
 
+- name: Add Immich Helm repository
+  kubernetes.core.helm_repository:
+    name: immich
+    repo_url: https://immich-app.github.io/immich-charts
+    kubeconfig: "{{ kubeconfig }}"
+  run_once: true
+
+- name: Update Helm repositories
+  command: helm repo update
+  run_once: true
+
 
 - name: Ensure immich namespace exists
   kubernetes.core.k8s:
     kind: Namespace
     name: "{{ immich_namespace }}"
     state: present
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   run_once: true
 
 - name: Delete existing Immich PersistentVolume
@@ -18,7 +29,7 @@
     kind: PersistentVolume
     name: immich-library-pv
     state: absent
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   run_once: true
 
 - name: Delete existing Immich PersistentVolumeClaim
@@ -27,7 +38,7 @@
     name: immich-library-pvc
     namespace: "{{ immich_namespace }}"
     state: absent
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   run_once: true
 
 - name: Create NFS PersistentVolume for Immich
@@ -47,7 +58,7 @@
         nfs:
           server: "{{ nfs_server }}"
           path: "{{ nfs_immich_library_path }}"
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   run_once: true
 
 - name: Create PersistentVolumeClaim for Immich library
@@ -67,7 +78,7 @@
             storage: 1Ti
         volumeName: immich-library-pv
         storageClassName: ""  # Explicitly set to empty string
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   run_once: true
 
 # - name: Get PostgreSQL password
@@ -132,14 +143,14 @@
     release_namespace: "{{ immich_namespace }}"
     values_files:
       - "/tmp/k3s/immich-values.yaml"
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   run_once: true
 
 - name: Check PV status
   kubernetes.core.k8s_info:
     kind: PersistentVolume
     name: immich-library-pv
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   register: pv_status
   run_once: true
 
@@ -148,7 +159,7 @@
     kind: PersistentVolumeClaim
     name: immich-library-pvc
     namespace: "{{ immich_namespace }}"
-    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: "{{ kubeconfig }}"
   register: pvc_status
   run_once: true
 

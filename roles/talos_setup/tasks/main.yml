@@ -69,13 +69,14 @@
         discovery:
           enabled: true
         etcd:
+          # Better settings for 3 control planes
           advertisedSubnets:
             - "10.0.0.0/24"
-            - "10.1.0.0/24"
           listenSubnets:
             - "10.0.0.0/24"
-            - "10.1.0.0/24"
-
+          extraArgs:
+            election-timeout: '1000'
+            heartbeat-interval: '100'
 
 - name: Generate base Talos configurations
   ansible.builtin.command:

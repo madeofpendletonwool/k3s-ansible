@@ -1,154 +1,153 @@
-
-- name: Create a directory for Navidrome storage if it does not exist
-  ansible.builtin.file:
-    path: /mnt/navidrome-storage
-    state: directory
-    mode: '0755'
-  become: yes
-
-- name: Create a directory for temporary files if it does not exist
-  ansible.builtin.file:
-    path: /tmp/k3s
-    state: directory
-    mode: '0755'
-
-
-- name: Create Deployment for Navidrome
-  template:
-    src: "navidrome-deployment-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-deployment.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Ensure navidrome namespace exists
-  command: >
-    k3s kubectl create namespace navidrome
-  args:
-    creates: /tmp/k3s/cattle-system-created
-  register: create_namespace_result_navidrome
-  failed_when: create_namespace_result_navidrome.rc != 0 and "already exists" not in create_namespace_result_navidrome.stderr
-  changed_when: create_namespace_result_navidrome.rc == 0
-  run_once: true
-
-- name: Apply Deployment for Navidrome
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-deployment.yaml
-  register: navidrome_deployment_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_deployment_apply_result.rc == 0
-  retries: 5
-
-- name: Create Service for Navidrome
-  template:
-    src: "navidrome-service-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-service.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply Service for Navidrome
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-service.yaml
-  register: navidrome_service_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_service_apply_result.rc == 0
-  retries: 5
-
-- name: Create Ingress for Navidrome
-  template:
-    src: "navidrome-ingress-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-ingress.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply Ingress for Navidrome
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-ingress.yaml
-  register: navidrome_ingress_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_ingress_apply_result.rc == 0
-  retries: 5
-
-- name: Create PV for Navidrome Data
-  template:
-    src: "navidrome-pv-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-pv.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply PV for Navidrome Data
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-pv.yaml
-  register: navidrome_pvc_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_pvc_apply_result.rc == 0
-  retries: 5
-
-- name: Create PVC for Navidrome Data
-  template:
-    src: "navidrome-nfs-pvc-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-pvc.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply PVC for Navidrome Data
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-pvc.yaml
-  register: navidrome_pvc_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_pvc_apply_result.rc == 0
-  retries: 5
-
-- name: Ensure rsync is installed on all nodes
-  package:
-    name: rsync
+- name: Create jellyfin namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
     state: present
-  become: true
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: jellyfin
 
-- name: Ensure rsyslog is installed on all nodes
-  package:
-    name: rsyslog
+- name: Create PVC for Jellyfin config/cache
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
     state: present
-  become: true
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: jellyfin-config-pvc
+        namespace: jellyfin
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi  # Jellyfin needs more space for cache/transcoding
+        storageClassName: rook-ceph-block
 
-- name: Fetch node IPs
-  ansible.builtin.set_fact:
-    node_ips: "{{ groups['node'] | join(' ') }}"
-  become: true
-
-- name: Generate data synchronization script
-  ansible.builtin.template:
-    src: sync-data-script.sh.j2
-    dest: /etc/cron.d/sync-data-script
-    mode: '0755'
-  become: true
-
-- name: Ensure cron service is running
-  ansible.builtin.service:
-    name: cron
-    state: started
-  become: true
-
-- name: Ensure the cron job is present
-  ansible.builtin.cron:
-    name: "Sync data from navidrome-storage to NFS"
-    minute: "0"
-    hour: "2"
-    job: "/path/to/sync-data-script.sh >> /var/log/sync-data-script.log 2>&1"
+- name: Deploy Jellyfin
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
     state: present
-    user: root
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: jellyfin
+        namespace: jellyfin
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate  # For clean volume handling
+        selector:
+          matchLabels:
+            app: jellyfin
+        template:
+          metadata:
+            labels:
+              app: jellyfin
+          spec:
+            terminationGracePeriodSeconds: 120
+            containers:
+              - name: jellyfin
+                image: jellyfin/jellyfin:latest
+                ports:
+                  - containerPort: 8096
+                    name: http
+                  - containerPort: 8920
+                    name: https
+                env:
+                  - name: JELLYFIN_PublishedServerUrl
+                    value: "https://jellyfin.{{ nginx_ingress_hostname }}"
+                volumeMounts:
+                  - name: config
+                    mountPath: /config
+                  - name: cache
+                    mountPath: /cache
+                  - name: movies
+                    mountPath: /media/movies
+                    readOnly: true
+                  - name: shows
+                    mountPath: /media/shows
+                    readOnly: true
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh", "-c", "sleep 10"]
+            volumes:
+              - name: config
+                persistentVolumeClaim:
+                  claimName: jellyfin-config-pvc
+              - name: cache
+                emptyDir: {}  # Temporary transcoding directory
+              - name: movies
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_movies_path }}"
+              - name: shows
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_shows_path }}"
 
+- name: Create PodDisruptionBudget for Jellyfin
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: jellyfin-pdb
+        namespace: jellyfin
+      spec:
+        minAvailable: 1
+        selector:
+          matchLabels:
+            app: jellyfin
 
-- name: Recursively remove directory
-  ansible.builtin.file:
-    path: /tmp/k3s
-    state: absent
+- name: Create Jellyfin Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: jellyfin
+        namespace: jellyfin
+      spec:
+        selector:
+          app: jellyfin
+        ports:
+          - name: http
+            port: 8096
+            targetPort: 8096
+          - name: https
+            port: 8920
+            targetPort: 8920
+
+- name: Create Jellyfin Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: jellyfin-ingress
+        namespace: jellyfin
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: "fin.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: jellyfin
+                      port:
+                        number: 8096

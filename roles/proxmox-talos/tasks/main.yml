@@ -161,7 +161,7 @@
     api_token_id: "{{ proxmox_api_token_id | regex_replace('[^a-zA-Z0-9_-]', '') }}"
     api_token_secret: "{{ proxmox_api_token_secret | regex_replace('[^a-zA-Z0-9_-]', '') }}"
     api_host: "{{ inventory_hostname }}"
-    name: "talos-control-plane-{{ 'offsite' if inventory_hostname in groups['proxmox_offsite'] else 'onsite' }}"
+    name: "talos-control-plane-{{ inventory_hostname.split('.')[-1] }}"  # Changed to use host identifier
     node: "{{ proxmox_node_name }}"
     cores: 2
     sockets: 1
@@ -178,17 +178,17 @@
     onboot: yes
     state: present
     validate_certs: false
-  when: inventory_hostname == groups['proxmox_onsite'][0] or inventory_hostname in groups['proxmox_offsite']
+  when: inventory_hostname in groups['proxmox']  # Changed to deploy on all Proxmox hosts
 
 - name: Create Talos worker VMs
   community.general.proxmox_kvm:
     api_user: "{{ proxmox_api_user }}@pve"
-    api_token_id: "{{ proxmox_api_token_id }}"
-    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_token_id: "{{ proxmox_api_token_id | regex_replace('[^a-zA-Z0-9_-]', '') }}"
+    api_token_secret: "{{ proxmox_api_token_secret | regex_replace('[^a-zA-Z0-9_-]', '') }}"
     api_host: "{{ inventory_hostname }}"
     name: "talos-worker-{{ inventory_hostname.split('.')[-1] }}"
     node: "{{ proxmox_node_name }}"
-    cores: 2
+    cores: 3
     sockets: 1
     memory: 8096
     cpu: "host"
@@ -217,10 +217,10 @@
     api_token_id: "{{ proxmox_api_token_id | regex_replace('[^a-zA-Z0-9_-]', '') }}"
     api_token_secret: "{{ proxmox_api_token_secret | regex_replace('[^a-zA-Z0-9_-]', '') }}"
     api_host: "{{ inventory_hostname }}"
-    name: "talos-control-plane-{{ 'offsite' if inventory_hostname in groups['proxmox_offsite'] else 'onsite' }}"
+    name: "talos-control-plane-{{ inventory_hostname.split('.')[-1] }}"  # Changed to match creation task
     node: "{{ proxmox_node_name }}"
     state: started
-  when: inventory_hostname == groups['proxmox_onsite'][0] or inventory_hostname in groups['proxmox_offsite']
+  when: inventory_hostname in groups['proxmox']  # Changed to start on all Proxmox hosts
   register: start_control_plane
   until: start_control_plane is not failed
   retries: 5

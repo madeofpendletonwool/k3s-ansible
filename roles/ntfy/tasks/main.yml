@@ -1,0 +1,146 @@
+# Add namespace
+- name: Add ntfy namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ ntfy_namespace }}"
+
+# Create PVC
+- name: Create PVC for ntfy cache
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: ntfy-cache-pvc
+        namespace: "{{ ntfy_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ ntfy_storage_size }}"
+        storageClassName: rook-ceph-block
+  delegate_to: localhost
+  when: ntfy_persistence_enabled | default(true)
+
+# Deploy ntfy with proper volume handling
+- name: Deploy ntfy
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ntfy
+        namespace: "{{ ntfy_namespace }}"
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate  # Ensure clean volume detachment
+        selector:
+          matchLabels:
+            app: ntfy
+        template:
+          metadata:
+            labels:
+              app: ntfy
+          spec:
+            terminationGracePeriodSeconds: 120
+            containers:
+              - name: ntfy
+                image: "binwiederhier/ntfy:{{ ntfy_version }}"  # Fixed image name
+                args: ["serve"]
+                resources:
+                  limits:
+                    memory: "{{ ntfy_memory_limit }}"
+                    cpu: "{{ ntfy_cpu_limit }}"
+                  requests:
+                    memory: "{{ ntfy_memory_request }}"
+                    cpu: "{{ ntfy_cpu_request }}"
+                ports:
+                  - containerPort: 80
+                    name: http
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh", "-c", "sleep 10"]
+            volumes:
+              - name: cache
+                persistentVolumeClaim:
+                  claimName: ntfy-cache-pvc
+              - name: config
+                configMap:
+                  name: ntfy-config
+  delegate_to: localhost
+
+# Add PodDisruptionBudget
+- name: Create PodDisruptionBudget for ntfy
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: ntfy-pdb
+        namespace: "{{ ntfy_namespace }}"
+      spec:
+        minAvailable: 1
+        selector:
+          matchLabels:
+            app: ntfy
+
+# Service remains the same
+- name: Deploy ntfy Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ntfy
+        namespace: "{{ ntfy_namespace }}"
+      spec:
+        selector:
+          app: ntfy
+        ports:
+          - port: 80
+            targetPort: 80
+            name: http
+  delegate_to: localhost
+
+# Ingress remains the same
+- name: Deploy ntfy Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: ntfy
+        namespace: "{{ ntfy_namespace }}"
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: "ntfy.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: ntfy
+                      port:
+                        number: 80
+  delegate_to: localhost

@@ -77,3 +77,30 @@ immich_namespace: immich
 immich_domain: immich.mydomain.com
 immich_chart_version: v1.115.0
 nfs_immich_library_path: "/path/to/photos"
+
+## ntfy
+
+# ntfy Configuration
+ntfy_namespace: ntfy
+ntfy_hostname: ntfy.your-domain.com
+ntfy_version: latest
+ntfy_replicas: 1
+
+# Resource configuration
+ntfy_memory_limit: "256Mi"
+ntfy_cpu_limit: "500m"
+ntfy_memory_request: "128Mi"
+ntfy_cpu_request: "250m"
+
+# Storage configuration
+ntfy_persistence_enabled: true
+ntfy_storage_size: "1Gi"
+
+# Optional: Enable custom configuration
+ntfy_config_enabled: false
+ntfy_base_url: "https://ntfy.your-domain.com"
+
+# Ingress configuration
+ntfy_ingress_entrypoints: "web,websecure"
+ntfy_tls_enabled: true
+ntfy_tls_secret_name: "ntfy-tls"  # If using cert-manager

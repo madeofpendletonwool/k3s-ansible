@@ -1,0 +1,180 @@
+- name: Create syncthing namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: syncthing
+
+- name: Create PVC for Syncthing config
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: syncthing-config-pvc
+        namespace: syncthing
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy Syncthing
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: syncthing
+        namespace: syncthing
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: syncthing
+        template:
+          metadata:
+            labels:
+              app: syncthing
+          spec:
+            terminationGracePeriodSeconds: 120
+            containers:
+              - name: syncthing
+                image: lscr.io/linuxserver/syncthing:latest
+                env:
+                  - name: PUID
+                    value: "1000"
+                  - name: PGID
+                    value: "1000"
+                  - name: TZ
+                    value: "America/Chicago"
+                  - name: HOSTNAME
+                    value: "syncthing"
+                ports:
+                  - containerPort: 8384
+                    name: webui
+                  - containerPort: 22000
+                    name: sync-tcp
+                    protocol: TCP
+                  - containerPort: 22000
+                    name: sync-udp
+                    protocol: UDP
+                  - containerPort: 21027
+                    name: discovery
+                    protocol: UDP
+                volumeMounts:
+                  - name: config
+                    mountPath: /config
+                  - name: syncdata
+                    mountPath: /data/collin-sync
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh", "-c", "sleep 10"]
+            volumes:
+              - name: config
+                persistentVolumeClaim:
+                  claimName: syncthing-config-pvc
+              - name: syncdata
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_syncthing_path }}"
+
+- name: Create PodDisruptionBudget for Syncthing
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: syncthing-pdb
+        namespace: syncthing
+      spec:
+        minAvailable: 1
+        selector:
+          matchLabels:
+            app: syncthing
+
+- name: Create Syncthing Web Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: syncthing-web
+        namespace: syncthing
+      spec:
+        selector:
+          app: syncthing
+        ports:
+          - protocol: TCP
+            port: 8384
+            targetPort: 8384
+            name: webui
+
+- name: Create Syncthing Sync Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: syncthing-sync
+        namespace: syncthing
+      spec:
+        selector:
+          app: syncthing
+        type: LoadBalancer  # Since we need direct access for sync
+        ports:
+          - protocol: TCP
+            port: 22000
+            targetPort: 22000
+            name: sync-tcp
+          - protocol: UDP
+            port: 22000
+            targetPort: 22000
+            name: sync-udp
+          - protocol: UDP
+            port: 21027
+            targetPort: 21027
+            name: discovery
+
+- name: Create Syncthing Web Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: syncthing-ingress
+        namespace: syncthing
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: "syncthing.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: syncthing-web
+                      port:
+                        number: 8384

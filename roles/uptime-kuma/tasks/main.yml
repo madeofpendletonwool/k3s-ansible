@@ -1,0 +1,114 @@
+# roles/uptime-kuma/tasks/main.yml
+---
+- name: Create uptime-kuma namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: uptime-kuma
+
+- name: Create PVC for uptime-kuma data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: uptime-kuma-data-pvc
+        namespace: uptime-kuma
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy uptime-kuma
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: uptime-kuma
+        namespace: uptime-kuma
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: uptime-kuma
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: uptime-kuma
+          spec:
+            containers:
+              - name: uptime-kuma
+                image: louislam/uptime-kuma:1
+                ports:
+                  - containerPort: 3001
+                    name: http
+                volumeMounts:
+                  - name: data
+                    mountPath: /app/data
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: uptime-kuma-data-pvc
+
+- name: Create uptime-kuma service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: uptime-kuma
+        namespace: uptime-kuma
+      spec:
+        selector:
+          app: uptime-kuma
+        ports:
+          - protocol: TCP
+            port: 3001
+            targetPort: 3001
+
+- name: Create uptime-kuma ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: uptime-kuma-ingress
+        namespace: uptime-kuma
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "uptime.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: uptime-kuma
+                      port:
+                        number: 3001
+        tls:
+          - secretName: uptime-tls-cert
+            hosts:
+              - "uptime.{{ nginx_ingress_hostname }}"

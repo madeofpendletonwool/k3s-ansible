@@ -26,7 +26,7 @@ postgresql:
   primary:
     persistence:
       enabled: true
-      storageClass: "donghorn"
+      storageClass: "rook-ceph-block"
       size: 8Gi
     initdb:
       scripts:
@@ -58,7 +58,7 @@ redis:
   master:
     persistence:
       enabled: true
-      storageClass: "donghorn"
+      storageClass: "rook-ceph-block"
       size: 2Gi
   ingress:
     main:
@@ -88,4 +88,4 @@ machine-learning:
     cache:
       enabled: true
       size: 5Gi
-      storageClass: "donghorn"
+      storageClass: "rook-ceph-block"

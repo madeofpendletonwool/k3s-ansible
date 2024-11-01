@@ -222,7 +222,7 @@
       spec:
         failureDomain: osd  # Changed from host
         replicated:
-          size: 2  # Reduced from 2
+          size: 3  # Reduced from 2
           requireSafeReplicaSize: false
         statusCheck:
           mirror: {}
@@ -259,6 +259,26 @@
 - name: Rook takes a HOT min to deploy
   ansible.builtin.pause:
     seconds: 160
+
+- name: Deploy Rook-Ceph toolbox
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    src: https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml
+    state: present
+  delegate_to: localhost
+
+- name: Wait for Rook-Ceph toolbox to be ready
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Pod
+    namespace: rook-ceph
+    label_selectors:
+      - app=rook-ceph-tools
+    wait: yes
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: true
 
 
 - name: Create Ceph Dashboard LoadBalancer Service

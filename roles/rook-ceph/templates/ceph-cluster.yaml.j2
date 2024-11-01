@@ -11,7 +11,7 @@ spec:
     count: {{ mon_count | int }}
     allowMultiplePerNode: false
   mgr:
-    count: 1
+    count: 2
   dashboard:
     enabled: true
     port: 7000
@@ -28,44 +28,9 @@ spec:
     all:
       tolerations:
         - operator: Exists
-    mon:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: topology.kubernetes.io/zone
-                  operator: In
-                  values:
-                    - onsite
-    mgr:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: topology.kubernetes.io/zone
-                  operator: In
-                  values:
-                    - onsite
-    osd:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: topology.kubernetes.io/zone
-                  operator: In
-                  values:
-                    - onsite
   csi:
     enableCSIHostNetwork: true
     provisioner:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: topology.kubernetes.io/zone
-                  operator: In
-                  values:
-                    - onsite
       tolerations:
         - operator: Exists
     plugin:
