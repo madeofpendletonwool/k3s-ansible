@@ -1,0 +1,122 @@
+## Container image configuration
+image:
+  repository: madeofpendletonwool/pinepods
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8040
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  hosts:
+    - host: {{ pinepods_domain }}
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
+  downloads:
+    storageClass: {{ storage_class }}
+    accessMode: ReadWriteOnce
+    size: {{ downloads_size }}
+  backups:
+    storageClass: {{ storage_class }}
+    accessMode: ReadWriteOnce
+    size: {{ backups_size }}
+
+postgresql:
+  enabled: true
+  auth:
+    username: postgres
+    password: {{ postgres_password }}
+    database: pinepods_database
+  persistence:
+    enabled: true
+    storageClass: {{ storage_class }}
+    size: {{ postgres_size }}
+
+valkey:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  replica:
+    replicaCount: 0
+  primary:
+    persistence:
+      enabled: false
+  service:
+    port: 6379
+
+env:
+  SEARCH_API_URL: "https://search.pinepods.online/api/search"
+  PEOPLE_API_URL: "https://people.pinepods.online/api/hosts"
+  USERNAME: {{ admin_username }}
+  PASSWORD: {{ admin_password }}
+  FULLNAME: {{ admin_fullname }}
+  EMAIL: {{ admin_email }}
+  DB_TYPE: "postgresql"
+  DB_USER: "postgres"
+  DB_NAME: "pinepods_database"
+  DB_PORT: "5432"
+  DEBUG_MODE: "false"
+
+backend:
+  enabled: true
+  image:
+    repository: madeofpendletonwool/pinepods_backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5000
+  secrets:
+    apiKey: {{ backend_api_key }}
+    apiSecret: {{ backend_api_secret }}
+  ingress:
+    enabled: true
+    className: ""
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+    hosts:
+      - host: {{ backend_domain }}
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+podpeople:
+  enabled: true
+  image:
+    repository: madeofpendletonwool/podpeople_db
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8085
+  persistence:
+    enabled: true
+    storageClass: {{ storage_class }}
+    size: {{ podpeople_size }}
+    accessMode: ReadWriteOnce
+  auth:
+    adminUsername: {{ admin_username }}
+    adminPassword: {{ admin_password }}
+  ingress:
+    enabled: true
+    className: ""
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+    hosts:
+      - host: {{ podpeople_domain }}
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []

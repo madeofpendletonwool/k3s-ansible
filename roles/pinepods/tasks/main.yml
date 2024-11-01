@@ -1,154 +1,43 @@
-
-- name: Create a directory for Navidrome storage if it does not exist
-  ansible.builtin.file:
-    path: /mnt/navidrome-storage
-    state: directory
-    mode: '0755'
-  become: yes
-
+# roles/pinepods/tasks/main.yml
+---
 - name: Create a directory for temporary files if it does not exist
   ansible.builtin.file:
     path: /tmp/k3s
     state: directory
     mode: '0755'
 
-
-- name: Create Deployment for Navidrome
-  template:
-    src: "navidrome-deployment-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-deployment.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Ensure navidrome namespace exists
-  command: >
-    k3s kubectl create namespace navidrome
-  args:
-    creates: /tmp/k3s/cattle-system-created
-  register: create_namespace_result_navidrome
-  failed_when: create_namespace_result_navidrome.rc != 0 and "already exists" not in create_namespace_result_navidrome.stderr
-  changed_when: create_namespace_result_navidrome.rc == 0
-  run_once: true
-
-- name: Apply Deployment for Navidrome
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-deployment.yaml
-  register: navidrome_deployment_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_deployment_apply_result.rc == 0
-  retries: 5
-
-- name: Create Service for Navidrome
-  template:
-    src: "navidrome-service-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-service.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply Service for Navidrome
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-service.yaml
-  register: navidrome_service_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_service_apply_result.rc == 0
-  retries: 5
-
-- name: Create Ingress for Navidrome
-  template:
-    src: "navidrome-ingress-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-ingress.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply Ingress for Navidrome
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-ingress.yaml
-  register: navidrome_ingress_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_ingress_apply_result.rc == 0
-  retries: 5
-
-- name: Create PV for Navidrome Data
-  template:
-    src: "navidrome-pv-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-pv.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply PV for Navidrome Data
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-pv.yaml
-  register: navidrome_pvc_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_pvc_apply_result.rc == 0
-  retries: 5
-
-- name: Create PVC for Navidrome Data
-  template:
-    src: "navidrome-nfs-pvc-template.yaml.j2"
-    dest: "/tmp/k3s/navidrome-pvc.yaml"
-    owner: "{{ ansible_user_id }}"
-    mode: 0755
-  run_once: true
-
-- name: Apply PVC for Navidrome Data
-  command: >
-    k3s kubectl apply -f /tmp/k3s/navidrome-pvc.yaml
-  register: navidrome_pvc_apply_result
-  changed_when: false
-  run_once: true
-  until: navidrome_pvc_apply_result.rc == 0
-  retries: 5
-
-- name: Ensure rsync is installed on all nodes
-  package:
-    name: rsync
+- name: Ensure pinepods namespace exists
+  kubernetes.core.k8s:
+    kind: Namespace
+    name: "{{ pinepods_namespace }}"
     state: present
-  become: true
+    kubeconfig: "{{ kubeconfig }}"
+  run_once: true
 
-- name: Ensure rsyslog is installed on all nodes
-  package:
-    name: rsyslog
-    state: present
-  become: true
+- name: Create Pinepods values file
+  template:
+    src: pinepods-values.yaml.j2
+    dest: "/tmp/k3s/pinepods-values.yaml"
+    mode: '0600'
+  run_once: true
 
-- name: Fetch node IPs
-  ansible.builtin.set_fact:
-    node_ips: "{{ groups['node'] | join(' ') }}"
-  become: true
+- name: Display Pinepods values file contents
+  ansible.builtin.command:
+    cmd: cat /tmp/k3s/pinepods-values.yaml
+  register: pinepods_values_content
+  run_once: true
 
-- name: Generate data synchronization script
-  ansible.builtin.template:
-    src: sync-data-script.sh.j2
-    dest: /etc/cron.d/sync-data-script
-    mode: '0755'
-  become: true
+- name: Show Pinepods values file contents
+  debug:
+    var: pinepods_values_content.stdout_lines
+  run_once: true
 
-- name: Ensure cron service is running
-  ansible.builtin.service:
-    name: cron
-    state: started
-  become: true
-
-- name: Ensure the cron job is present
-  ansible.builtin.cron:
-    name: "Sync data from navidrome-storage to NFS"
-    minute: "0"
-    hour: "2"
-    job: "/path/to/sync-data-script.sh >> /var/log/sync-data-script.log 2>&1"
-    state: present
-    user: root
-
-
-- name: Recursively remove directory
-  ansible.builtin.file:
-    path: /tmp/k3s
-    state: absent
+- name: Deploy Pinepods using Helm
+  kubernetes.core.helm:
+    name: "{{ pinepods_release_name }}"
+    chart_ref: ./pinepods  # Assuming chart is in local directory
+    release_namespace: "{{ pinepods_namespace }}"
+    values_files:
+      - "/tmp/k3s/pinepods-values.yaml"
+    kubeconfig: "{{ kubeconfig }}"
+  run_once: true
