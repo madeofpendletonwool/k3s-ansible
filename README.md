@@ -243,7 +243,7 @@ pics.mysite.com
 ntfy.mysite.com
 podsync.mysite.com
 pinepods.mysite.com
-podpeople.mysite.com
+people.mysite.com
 search.mysite.com
 search.myothersite.com
 
