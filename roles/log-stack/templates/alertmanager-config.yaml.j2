@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-config
+  namespace: {{ log_stack_namespace }}
+stringData:
+  alertmanager.yaml: |
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['namespace', 'alertname']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'ntfy'
+      routes:
+        - receiver: 'null'
+          matchers:
+            - alertname = "Watchdog"
+        - receiver: 'ntfy'
+          matchers:
+            - severity =~ "warning|critical"
+    receivers:
+      - name: 'null'
+      - name: 'ntfy'
+      webhook_configs:
+      - url: "{{ ntfy_custom_url }}"
+          send_resolved: true
+          http_config:
+          headers:
+              Title: "Alert from Prometheus"
+              Priority: "high"
+              Tags: "warning"
+          message: "Test alert message"

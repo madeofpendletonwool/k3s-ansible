@@ -1,0 +1,42 @@
+# roles/log-stack/templates/alert-translator.yaml.j2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-translator
+  namespace: {{ log_stack_namespace }}
+  labels:
+    app: alert-translator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alert-translator
+  template:
+    metadata:
+      labels:
+        app: alert-translator
+    spec:
+      containers:
+        - name: alert-translator
+          image: madeofpendletonwool/alert-translator:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            - name: NTFY_URL
+              value: "http://ntfy.ntfy.svc.cluster.local"
+            - name: NTFY_TOPIC
+              value: "kubernetes-alerts"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-translator
+  namespace: {{ log_stack_namespace }}
+spec:
+  selector:
+    app: alert-translator
+  ports:
+    - port: 80
+      targetPort: 5000

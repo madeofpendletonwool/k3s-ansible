@@ -1,0 +1,70 @@
+---
+- name: Create temporary directory for log-stack
+  ansible.builtin.file:
+    path: /tmp/k3s
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+
+- name: Add prometheus helm repository
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: https://prometheus-community.github.io/helm-charts
+    kubeconfig: "{{ kubeconfig }}"
+  delegate_to: localhost
+
+- name: Create log-stack namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ log_stack_namespace }}"
+  delegate_to: localhost
+
+- name: Create alert translator values file
+  template:
+    src: "alert-translator.yaml.j2"
+    dest: "/tmp/k3s/alert-translator.yaml"
+    mode: '0600'
+  delegate_to: localhost
+
+- name: Deploy alert translator
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    src: "/tmp/k3s/alert-translator.yaml"
+  delegate_to: localhost
+
+- name: Create alertmanager values file
+  template:
+    src: "prometheus-values.yaml.j2"
+    dest: "/tmp/k3s/alertmanager.yaml"
+    mode: '0600'
+  delegate_to: localhost
+
+- name: Deploy prometheus stack using Helm
+  kubernetes.core.helm:
+    name: "{{ log_stack_release_name }}"
+    chart_ref: prometheus-community/kube-prometheus-stack
+    release_namespace: "{{ log_stack_namespace }}"
+    values_files:
+      - "/tmp/k3s/alertmanager.yaml"
+    kubeconfig: "{{ kubeconfig }}"
+  delegate_to: localhost
+
+- name: Create ingress template file
+  template:
+    src: "log-stack-template.yaml.j2"
+    dest: "/tmp/k3s/log-stack-ingress.yaml"
+    mode: '0600'
+  delegate_to: localhost
+
+- name: Apply ingress resources
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    src: "/tmp/k3s/log-stack-ingress.yaml"
+  delegate_to: localhost

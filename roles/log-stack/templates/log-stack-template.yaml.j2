@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-service
+  namespace: {{ log_stack_namespace }}
+spec:
+  ports:
+    - protocol: TCP
+      port: {{ alertmanager_port }}
+      targetPort: {{ alertmanager_port }}
+  selector:
+    app.kubernetes.io/instance: {{ log_stack_release_name }}-alertmanager
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: {{ log_stack_namespace }}
+spec:
+  ports:
+    - protocol: TCP
+      port: {{ grafana_port }}
+      targetPort: {{ grafana_port }}
+  selector:
+    app.kubernetes.io/instance: {{ log_stack_release_name }}
+    app.kubernetes.io/name: grafana
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: {{ log_stack_namespace }}
+spec:
+  ports:
+    - protocol: TCP
+      port: {{ prometheus_port }}
+      targetPort: {{ prometheus_port }}
+  selector:
+    app.kubernetes.io/instance: {{ log_stack_release_name }}-prometheus
+    app.kubernetes.io/name: prometheus
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus-ingress
+  namespace: {{ log_stack_namespace }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: prometheus.{{ nginx_ingress_hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-service
+                port:
+                  number: {{ prometheus_port }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: {{ log_stack_namespace }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: grafana.{{ nginx_ingress_hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana-service
+                port:
+                  number: {{ grafana_port }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alertmanager-ingress
+  namespace: {{ log_stack_namespace }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: alertmanager.{{ nginx_ingress_hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: alertmanager-service
+                port:
+                  number: {{ alertmanager_port }}
