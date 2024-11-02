@@ -48,7 +48,9 @@ metadata:
   name: prometheus-ingress
   namespace: {{ log_stack_namespace }}
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   rules:
     - host: prometheus.{{ nginx_ingress_hostname }}
@@ -61,6 +63,10 @@ spec:
                 name: prometheus-service
                 port:
                   number: {{ prometheus_port }}
+  tls:
+    - secretName: prometheus-tls-cert
+      hosts:
+        - "prometheus.{{ nginx_ingress_hostname }}"
 
 ---
 apiVersion: networking.k8s.io/v1
@@ -69,7 +75,9 @@ metadata:
   name: grafana-ingress
   namespace: {{ log_stack_namespace }}
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   rules:
     - host: grafana.{{ nginx_ingress_hostname }}
@@ -82,6 +90,10 @@ spec:
                 name: grafana-service
                 port:
                   number: {{ grafana_port }}
+  tls:
+    - secretName: grafana-tls-cert
+      hosts:
+        - "grafana.{{ nginx_ingress_hostname }}"
 
 ---
 apiVersion: networking.k8s.io/v1
@@ -103,3 +115,7 @@ spec:
                 name: alertmanager-service
                 port:
                   number: {{ alertmanager_port }}
+  tls:
+    - secretName: alertmanager-tls-cert
+      hosts:
+        - "alertmanager.{{ nginx_ingress_hostname }}"

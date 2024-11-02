@@ -93,10 +93,12 @@
         name: opodsync-ingress
         namespace: opodsync
         annotations:
-          traefik.ingress.kubernetes.io/router.entrypoints: web
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
       spec:
         rules:
-          - host: "podcasts.{{ nginx_ingress_hostname }}"
+          - host: "podsync.{{ nginx_ingress_hostname }}"
             http:
               paths:
                 - path: /
@@ -106,3 +108,7 @@
                       name: opodsync
                       port:
                         number: 8080
+        tls:
+          - secretName: opodsync-tls-cert
+            hosts:
+              - "podsync.{{ nginx_ingress_hostname }}"

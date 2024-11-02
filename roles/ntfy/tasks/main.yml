@@ -130,7 +130,9 @@
         name: ntfy
         namespace: "{{ ntfy_namespace }}"
         annotations:
-          traefik.ingress.kubernetes.io/router.entrypoints: web
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
       spec:
         rules:
           - host: "ntfy.{{ nginx_ingress_hostname }}"
@@ -143,4 +145,8 @@
                       name: ntfy
                       port:
                         number: 80
+        tls:
+          - secretName: ntfy-tls-cert
+            hosts:
+              - "ntfy.{{ nginx_ingress_hostname }}"
   delegate_to: localhost

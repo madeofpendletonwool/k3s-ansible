@@ -138,10 +138,12 @@
         name: jellyfin-ingress
         namespace: jellyfin
         annotations:
-          traefik.ingress.kubernetes.io/router.entrypoints: web
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
       spec:
         rules:
-          - host: "fin.{{ nginx_ingress_hostname }}"
+          - host: "jellyfin.{{ nginx_ingress_hostname }}"
             http:
               paths:
                 - path: /
@@ -151,3 +153,7 @@
                       name: jellyfin
                       port:
                         number: 8096
+        tls:
+          - secretName: jellyfin-tls-cert
+            hosts:
+              - "jellyfin.{{ nginx_ingress_hostname }}"

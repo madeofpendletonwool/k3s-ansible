@@ -135,10 +135,12 @@
         name: navidrome-ingress
         namespace: navidrome
         annotations:
-          traefik.ingress.kubernetes.io/router.entrypoints: web
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
       spec:
         rules:
-          - host: "navidrome.{{ nginx_ingress_hostname }}"
+          - host: "nav.{{ nginx_ingress_hostname }}"
             http:
               paths:
                 - path: /
@@ -148,6 +150,10 @@
                       name: navidrome
                       port:
                         number: 4533
+        tls:
+          - secretName: navidrome-tls-cert
+            hosts:
+              - "nav.{{ nginx_ingress_hostname }}"
 
 
 - name: Deploy Bonob

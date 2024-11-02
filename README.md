@@ -230,3 +230,21 @@ kubectl get nodes,pv,pvc,storageclass && kubectl get pods --all-namespaces | gre
 - ntfy: ntfy Notification platform
 - pinepods: Pinepods Podcast Server
 - uptime-kuma: Uptime Kuma Monitoring
+
+
+## Domains quick reference
+
+jellyfin.mysite.com
+grafana.mysite.com
+prometheus.mysite.com
+alertmangaer.mysite.com
+rss.mysite.com
+pics.mysite.com
+ntfy.mysite.com
+podsync.mysite.com
+pinepods.mysite.com
+podpeople.mysite.com
+search.mysite.com
+search.myothersite.com
+
+
