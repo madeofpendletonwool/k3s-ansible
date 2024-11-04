@@ -145,8 +145,4 @@
                       name: ntfy
                       port:
                         number: 80
-        tls:
-          - secretName: ntfy-tls-cert
-            hosts:
-              - "ntfy.{{ nginx_ingress_hostname }}"
   delegate_to: localhost

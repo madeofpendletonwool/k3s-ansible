@@ -11,7 +11,7 @@ service:
 ingress:
   enabled: true
   className: ""
-annotations:
+  annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
@@ -20,10 +20,6 @@ annotations:
       paths:
         - path: /
           pathType: Prefix
-  tls:
-    - secretName: pinepods-tls-cert
-      hosts:
-        - {{ pinepods_domain }}
 
 persistence:
   enabled: true
@@ -89,18 +85,14 @@ backend:
     enabled: true
     className: ""
     annotations:
-        traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-        traefik.ingress.kubernetes.io/router.tls: "true"
-        traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
     hosts:
       - host: {{ backend_domain }}
         paths:
           - path: /
             pathType: Prefix
-    tls:
-      - secretName: backend-tls-cert
-        hosts:
-          - {{ backend_domain }}
 
 podpeople:
   enabled: true
@@ -123,15 +115,11 @@ podpeople:
     enabled: true
     className: ""
     annotations:
-        traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-        traefik.ingress.kubernetes.io/router.tls: "true"
-        traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
     hosts:
       - host: {{ podpeople_domain }}
         paths:
           - path: /
             pathType: Prefix
-    tls:
-      - secretName: podpeople-tls-cert
-        hosts:
-          - {{ podpeople_domain }}

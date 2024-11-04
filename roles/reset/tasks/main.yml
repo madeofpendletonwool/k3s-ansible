@@ -1,96 +1,114 @@
 ---
-- name: Disable services
-  systemd:
-    name: "{{ item }}"
+
+# Token management on a single host
+- name: Handle token creation on primary Proxmox host
+  # when: inventory_hostname == groups['proxmox'][0]
+  block:
+    - name: Check if API token exists
+      ansible.builtin.command: pveum user token list {{ proxmox_api_user }}@pve
+      register: token_list
+      changed_when: false
+      check_mode: false
+
+    - name: Debug token list
+      ansible.builtin.debug:
+        var: token_list.stdout_lines
+
+    - name: Remove existing API token if it exists
+      ansible.builtin.command: pveum user token remove {{ proxmox_api_user }}@pve {{ proxmox_api_token_id }}
+      when: proxmox_api_token_id in token_list.stdout
+      ignore_errors: true
+
+    - name: Create new API token
+      ansible.builtin.command: pveum user token add {{ proxmox_api_user }}@pve {{ proxmox_api_token_id }} --privsep 0
+      register: token_result
+
+    - name: Debug raw token result
+      ansible.builtin.debug:
+        var: token_result.stdout_lines
+        
+    - name: Save raw token output
+      ansible.builtin.copy:
+        content: "{{ token_result.stdout }}"
+        dest: "/tmp/raw_token_output"
+      delegate_to: localhost
+
+    - name: Read raw token output
+      ansible.builtin.command: cat /tmp/raw_token_output
+      register: raw_token
+      delegate_to: localhost
+
+    - name: Extract token secret
+      ansible.builtin.set_fact:
+        proxmox_api_token_secret: "{{ token_result.stdout_lines[7] | regex_replace('^.*│\\s*value\\s*│\\s*([a-f0-9-]+)\\s*│.*$', '\\1') }}"
+
+    - name: Debug token (remove in production)
+      ansible.builtin.debug:
+        msg: "Extracted token: {{ proxmox_api_token_secret }}"
+
+
+    - name: Debug token
+      ansible.builtin.debug:
+        msg: "Token created for {{ inventory_hostname }}: {{ proxmox_api_token_secret }}"
+
+
+    - name: Debug extracted token
+      ansible.builtin.debug:
+        msg: 
+          - "Raw token output: {{ raw_token.stdout }}"
+          - "Extracted token: {{ proxmox_api_token_secret }}"
+      delegate_to: localhost
+
+- name: Shutdown Talos control plane VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-control-plane-{{ inventory_hostname.split('.')[-1] }}"
+    node: "{{ proxmox_node_name }}"
     state: stopped
-    enabled: false
-  failed_when: false
-  with_items:
-    - k3s
-    - k3s-node
-    - k3s-init
+    force: true
+  when: inventory_hostname in groups['proxmox']
+  ignore_errors: true
 
-- name: RUN pkill -9 -f "k3s/data/[^/]+/bin/containerd-shim-runc"
-  register: pkill_containerd_shim_runc
-  command: pkill -9 -f "k3s/data/[^/]+/bin/containerd-shim-runc"
-  changed_when: "pkill_containerd_shim_runc.rc == 0"
-  failed_when: false
+- name: Shutdown Talos worker VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-worker-{{ inventory_hostname.split('.')[-1] }}"
+    node: "{{ proxmox_node_name }}"
+    state: stopped
+    force: true
+  when: inventory_hostname in groups['proxmox']
+  ignore_errors: true
 
-- name: Umount k3s filesystems
-  include_tasks: umount_with_children.yml
-  with_items:
-    - /run/k3s
-    - /var/lib/kubelet
-    - /run/netns
-    - /var/lib/rancher/k3s
-    - /var/lib/kubelet/pods
-    - /var/lib/kubelet/plugins
-    - /run/netns/cni-
-  loop_control:
-    loop_var: mounted_fs
+- name: Wait for VMs to fully stop
+  ansible.builtin.pause:
+    seconds: 10
 
-- name: Remove service files, binaries and data
-  file:
-    name: "{{ item }}"
+- name: Delete Talos control plane VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-control-plane-{{ inventory_hostname.split('.')[-1] }}"
+    node: "{{ proxmox_node_name }}"
     state: absent
-  with_items:
-    - /usr/local/bin/k3s
-    - "{{ systemd_dir }}/k3s.service"
-    - "{{ systemd_dir }}/k3s-node.service"
-    - /etc/rancher/k3s
-    - /run/k3s
-    - /run/flannel
-    - /etc/rancher/
-    - /var/lib/kubelet
-    - /var/lib/rancher/k3s
-    - /var/lib/rancher/
-    - /var/lib/cni/
-    - /etc/cni/net.d
+  when: inventory_hostname in groups['proxmox']
+  ignore_errors: true
 
-- name: Remove K3s http_proxy files
-  file:
-    name: "{{ item }}"
+- name: Delete Talos worker VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ proxmox_api_user }}@pve"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    api_host: "{{ inventory_hostname }}"
+    name: "talos-worker-{{ inventory_hostname.split('.')[-1] }}"
+    node: "{{ proxmox_node_name }}"
     state: absent
-  with_items:
-    - "{{ systemd_dir }}/k3s.service.d/http_proxy.conf"
-    - "{{ systemd_dir }}/k3s.service.d"
-    - "{{ systemd_dir }}/k3s-node.service.d/http_proxy.conf"
-    - "{{ systemd_dir }}/k3s-node.service.d"
-  when: proxy_env is defined
-
-- name: Reload daemon_reload
-  systemd:
-    daemon_reload: true
-
-- name: Remove tmp directory used for manifests
-  file:
-    path: /tmp/k3s
-    state: absent
-
-- name: Check if rc.local exists
-  stat:
-    path: /etc/rc.local
-  register: rcfile
-
-- name: Remove rc.local modifications for proxmox lxc containers
-  become: true
-  blockinfile:
-    path: /etc/rc.local
-    content: "{{ lookup('template', 'templates/rc.local.j2') }}"
-    create: false
-    state: absent
-  when: proxmox_lxc_configure and rcfile.stat.exists
-
-- name: Check rc.local for cleanup
-  become: true
-  slurp:
-    src: /etc/rc.local
-  register: rcslurp
-  when: proxmox_lxc_configure and rcfile.stat.exists
-
-- name: Cleanup rc.local if we only have a Shebang line
-  become: true
-  file:
-    path: /etc/rc.local
-    state: absent
-  when: proxmox_lxc_configure and rcfile.stat.exists and ((rcslurp.content | b64decode).splitlines() | length) <= 1
+  when: inventory_hostname in groups['proxmox']
+  ignore_errors: true

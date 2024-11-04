@@ -115,7 +115,3 @@
                       name: freshrss
                       port:
                         number: 80
-        tls:
-          - secretName: freshrss-tls-cert
-            hosts:
-              - "rss.{{ nginx_ingress_hostname }}"

@@ -108,7 +108,3 @@
                       name: uptime-kuma
                       port:
                         number: 3001
-        tls:
-          - secretName: uptime-tls-cert
-            hosts:
-              - "uptime.{{ nginx_ingress_hostname }}"

@@ -140,7 +140,7 @@
 
 - name: Download Talos ISO
   ansible.builtin.get_url:
-    url: "https://factory.talos.dev/image/6e810eb45767cfabcdb7a45e389eee803045af7a9467faebde5c91164861883a/v1.8.1/nocloud-amd64.iso"
+    url: "{{ talos_install_iso }}"
     dest: "/var/lib/vz/template/iso/talos-{{ talos_version }}-amd64.iso"
     mode: '0644'
     force: false
@@ -163,9 +163,9 @@
     api_host: "{{ inventory_hostname }}"
     name: "talos-control-plane-{{ inventory_hostname.split('.')[-1] }}"  # Changed to use host identifier
     node: "{{ proxmox_node_name }}"
-    cores: 2
+    cores: 3         # Up from 2
     sockets: 1
-    memory: 4096
+    memory: 5144  
     cpu: "host"
     sata:
       sata0: "{{ proxmox_data_store }}:32,format=raw"
@@ -188,9 +188,9 @@
     api_host: "{{ inventory_hostname }}"
     name: "talos-worker-{{ inventory_hostname.split('.')[-1] }}"
     node: "{{ proxmox_node_name }}"
-    cores: 3
+    cores: 4         # Up from 3
     sockets: 1
-    memory: 8096
+    memory: 13288    # Up from 8096 (12GB)
     cpu: "host"
     sata:
       sata0: "{{ proxmox_data_store }}:32,format=raw"

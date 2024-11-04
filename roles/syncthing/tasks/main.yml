@@ -165,10 +165,12 @@
         name: syncthing-ingress
         namespace: syncthing
         annotations:
-          traefik.ingress.kubernetes.io/router.entrypoints: web
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
       spec:
         rules:
-          - host: "syncthing.{{ nginx_ingress_hostname }}"
+          - host: "sync.{{ nginx_ingress_hostname }}"
             http:
               paths:
                 - path: /

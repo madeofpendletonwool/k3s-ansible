@@ -108,7 +108,3 @@
                       name: opodsync
                       port:
                         number: 8080
-        tls:
-          - secretName: opodsync-tls-cert
-            hosts:
-              - "podsync.{{ nginx_ingress_hostname }}"

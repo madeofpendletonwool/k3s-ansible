@@ -181,7 +181,7 @@
         annotations:
           traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
           traefik.ingress.kubernetes.io/router.tls: "true"
-          traefik.ingress.kubernetes.io/router.tls.certresolver: default
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
       spec:
         rules:
           - host: "search.{{ nginx_ingress_hostname }}"
@@ -194,7 +194,3 @@
                       name: searxng
                       port:
                         number: 8080
-        tls:
-          - secretName: searxng-tls-cert
-            hosts:
-              - "search.{{ nginx_ingress_hostname }}"

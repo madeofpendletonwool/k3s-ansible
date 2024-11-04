@@ -1,0 +1,8 @@
+---
+- name: Configure log-stack
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  roles:
+    - role: log-stack

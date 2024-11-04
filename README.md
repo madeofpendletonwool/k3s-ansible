@@ -86,10 +86,10 @@ ansible-playbook terraria-server.yml -i inventory/hosts.ini --ask-become-pass
 
 ### 🔥 Remove k3s cluster
 
-#### WIP
+This will destroy all the talos servers
 
-```bash
-ansible-playbook reset.yml -i inventory/my-cluster/hosts.ini
+```
+ansible-playbook reset.yml -i inventory/hosts.ini --ask-become-pass 
 ```
 
 >You should also reboot these nodes due to the VIP not being destroyed
@@ -217,6 +217,15 @@ kubectl api-resources --verbs=list --namespaced -o name | xargs -n 1 kubectl get
 # Quick cluster health check
 kubectl get nodes,pv,pvc,storageclass && kubectl get pods --all-namespaces | grep -v "Running\|Completed"
 ```
+
+
+## For Access to prometheus and alertmanager UIs
+
+# For Prometheus
+kubectl port-forward svc/prometheus-service -n {{ log_stack_namespace }} {{ prometheus_port }}:{{ prometheus_port }}
+
+# For Alertmanager
+kubectl port-forward svc/alertmanager-service -n {{ log_stack_namespace }} {{ alertmanager_port }}:{{ alertmanager_port }}
 
 ## Namespace Quick Reference
 - ingress-traefik: Traefik ingress controller

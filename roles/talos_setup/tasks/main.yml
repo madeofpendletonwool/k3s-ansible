@@ -28,16 +28,6 @@
   delegate_to: localhost
   run_once: true
 
-- name: Create extensions config patch
-  ansible.builtin.copy:
-    dest: "/tmp/talos-config/extensions-patch.yaml"
-    content: |
-      machine:
-        install:
-          extensions:
-            - image: ghcr.io/siderolabs/util-linux-tools:2.40.2
-            - image: ghcr.io/siderolabs/tailscale:1.76.0
-
 # Optional: Create Tailscale config if you want to use it
 - name: Create Tailscale configuration
   ansible.builtin.copy:
@@ -80,7 +70,7 @@
 
 - name: Generate base Talos configurations
   ansible.builtin.command:
-    cmd: "talosctl gen config talos-proxmox-cluster https://{{ kube_vip_ip }}:6443 --config-patch @/tmp/talos-config/extensions-patch.yaml --config-patch-control-plane @/tmp/talos-config/cp.patch.yaml --with-examples=false --with-docs=false --output-dir /tmp/talos-config"
+    cmd: "talosctl gen config talos-proxmox-cluster https://{{ kube_vip_ip }}:6443 --config-patch-control-plane @/tmp/talos-config/cp.patch.yaml --with-examples=false --with-docs=false --output-dir /tmp/talos-config"
   delegate_to: localhost
   run_once: true
 
@@ -285,3 +275,32 @@
     - kube_vip_lb_ip_range is not defined
     - not (cilium_bgp | default(false))
     - cilium_iface is not defined
+
+- name: Deploy metrics-server
+  kubernetes.core.k8s:
+    state: present
+    src: https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+    kubeconfig: "{{ kubeconfig }}"
+
+- name: Patch metrics-server to add insecure-tls flag
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: metrics-server
+        namespace: kube-system
+      spec:
+        template:
+          spec:
+            containers:
+              - name: metrics-server
+                args:
+                  - --cert-dir=/tmp
+                  - --secure-port=10250
+                  - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+                  - --kubelet-use-node-status-port
+                  - --metric-resolution=15s
+                  - --kubelet-insecure-tls
