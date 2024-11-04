@@ -1,0 +1,12 @@
+# roles/homepage/templates/kubernetes.yaml.j2
+---
+mode: cluster
+# Since we're running in-cluster, we'll use the service account approach
+# The following settings will be automatically handled by the cluster configuration
+
+clusters:
+  - name: {{ homepage_k8s_cluster_name | default('homelab') }}
+    # These will be automatically populated from the service account
+    certificateAuthority: ""
+    server: ""
+    token: ""

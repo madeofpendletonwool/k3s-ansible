@@ -1,0 +1,81 @@
+# roles/homepage/templates/bookmarks.yaml.j2
+---
+- Development:
+    - GitHub:
+        - abbr: GH
+          href: {{ homepage_bookmarks_github_url | default('https://github.com/') }}
+{% if homepage_bookmarks_github_repos is defined %}
+{% for repo in homepage_bookmarks_github_repos %}
+    - {{ repo.name }}:
+        - abbr: {{ repo.abbr | default('GH') }}
+          href: {{ repo.url }}
+          description: {{ repo.description | default('') }}
+{% endfor %}
+{% endif %}
+    - Documentation:
+        - abbr: DC
+          href: {{ homepage_bookmarks_docs_url | default('https://kubernetes.io/docs/home/') }}
+          description: Kubernetes Documentation
+
+- Cloud & Infrastructure:
+{% if homepage_cloud_bookmarks is defined %}
+{% for bookmark in homepage_cloud_bookmarks %}
+    - {{ bookmark.name }}:
+        - icon: {{ bookmark.icon | default(bookmark.name | lower + '.png') }}
+          href: {{ bookmark.url }}
+          description: {{ bookmark.description | default('') }}
+{% endfor %}
+{% endif %}
+    - Cloudflare:
+        - icon: cloudflare.png
+          href: https://dash.cloudflare.com
+          description: DNS & CDN Management
+
+- Homelab Management:
+    - Proxmox:
+        - abbr: PX
+          href: {{ homepage_proxmox_url | default('https://proxmox.local:8006') }}
+          description: Virtual Infrastructure Manager
+    - Portainer:
+        - icon: portainer.png
+          href: {{ homepage_portainer_url | default('https://portainer.local') }}
+          description: Container Management
+    - Kubernetes Dashboard:
+        - abbr: K8
+          href: {{ homepage_k8s_dashboard_url | default('https://kubernetes.local') }}
+          description: Kubernetes Cluster Management
+
+- Monitoring & Logs:
+    - Grafana:
+        - icon: grafana.png
+          href: {{ homepage_grafana_url | default('https://grafana.local') }}
+          description: Metrics & Dashboards
+    - Prometheus:
+        - icon: prometheus.png
+          href: {{ homepage_prometheus_url | default('https://prometheus.local') }}
+          description: Metrics Collection
+{% if homepage_kibana_enabled | default(false) %}
+    - Kibana:
+        - icon: kibana.png
+          href: {{ homepage_kibana_url }}
+          description: Log Analysis
+{% endif %}
+
+- Network Management:
+    - Router:
+        - abbr: RT
+          href: {{ homepage_router_url | default('https://router.local') }}
+          description: Network Gateway
+    - Pi-hole:
+        - icon: pihole.png
+          href: {{ homepage_pihole_url | default('https://pihole.local/admin') }}
+          description: Network-wide Ad Blocking
+{% if homepage_network_bookmarks is defined %}
+{% for bookmark in homepage_network_bookmarks %}
+    - {{ bookmark.name }}:
+        - icon: {{ bookmark.icon | default('') }}
+          abbr: {{ bookmark.abbr | default('') }}
+          href: {{ bookmark.url }}
+          description: {{ bookmark.description | default('') }}
+{% endfor %}
+{% endif %}

@@ -104,3 +104,97 @@ ntfy_base_url: "https://ntfy.your-domain.com"
 ntfy_ingress_entrypoints: "web,websecure"
 ntfy_tls_enabled: true
 ntfy_tls_secret_name: "ntfy-tls"  # If using cert-manager
+
+# Homepage Vars
+
+# Deployment variables
+homepage_namespace: homepage
+homepage_image: ghcr.io/gethomepage/homepage:latest
+homepage_replicas: 1
+
+# Settings variables
+homepage_title: "Homelab Dashboard"
+homepage_theme: "dark"
+homepage_color: "blue"
+homepage_start_url: "/"
+
+# Service group names - can be overridden to add/remove/modify groups
+homepage_service_groups:
+  - Infrastructure
+  - Applications
+  - Media
+  - Monitoring
+  - Storage
+
+# Kubernetes integration
+homepage_k8s_enabled: true
+homepage_k8s_mode: cluster
+
+# Add to roles/homepage/defaults/main.yml
+
+# GitHub configuration
+homepage_bookmarks_github_url: "https://github.com/"
+homepage_bookmarks_github_repos:
+  - name: "Ansible Config"
+    abbr: "AC"
+    url: "https://github.com/yourusername/ansible-config"
+    description: "Homelab Ansible Configuration"
+
+# Cloud bookmarks
+homepage_cloud_bookmarks:
+  - name: "AWS Console"
+    icon: "aws.png"
+    url: "https://console.aws.amazon.com"
+    description: "AWS Management Console"
+
+# Infrastructure URLs
+homepage_portainer_url: "https://portainer.local"
+homepage_router_url: "https://router.local"
+homepage_pihole_url: "https://pihole.local/admin"
+
+# Optional services
+homepage_kibana_enabled: false
+homepage_kibana_url: "https://kibana.local"
+
+# Additional network bookmarks
+homepage_network_bookmarks:
+  - name: "Switch"
+    abbr: "SW"
+    url: "https://switch.local"
+    description: "Network Switch Management"
+
+# Media Services
+homepage_jellyfin_enabled: true
+homepage_jellyfin_url: "https://jellyfin.local"
+homepage_jellyfin_api_key: ""  # Required if jellyfin is enabled
+
+# Infrastructure
+homepage_k8s_dashboard_url: "https://k8s.local"
+homepage_k8s_cluster_name: "homelab"
+homepage_proxmox_url: "https://proxmox.local:8006"
+homepage_proxmox_host: "proxmox.local"
+
+# Monitoring
+homepage_monitoring_enabled: true
+homepage_grafana_url: "https://grafana.local"
+homepage_grafana_api_key: ""
+homepage_prometheus_url: "https://prometheus.local"
+homepage_node_exporter_url: "https://node-exporter.local"
+
+# Storage
+homepage_longhorn_url: "https://longhorn.local"
+
+# Custom Services Example
+homepage_custom_services:
+  - name: "Wiki"
+    icon: "mdi-book-open-page-variant"
+    url: "https://wiki.local"
+    description: "Documentation"
+  - name: "GitLab"
+    icon: "gitlab.png"
+    url: "https://gitlab.local"
+    description: "Source Control"
+    widget:
+      type: "gitlab"
+      url: "https://gitlab.local"
+      key: ""

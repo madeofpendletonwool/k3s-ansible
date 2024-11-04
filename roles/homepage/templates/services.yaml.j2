@@ -1,0 +1,93 @@
+# roles/homepage/templates/services.yaml.j2
+---
+- Media:
+{% if homepage_jellyfin_enabled | default(true) %}
+    - Jellyfin:
+        icon: jellyfin.png
+        href: "{{ homepage_jellyfin_url }}"
+        description: Media Server
+        widget:
+          type: jellyfin
+          url: "{{ homepage_jellyfin_url }}"
+          key: "{{ homepage_jellyfin_api_key }}"
+          enableBlocks: true
+          enableNowPlaying: true
+          enableUser: true
+          showEpisodeNumber: true
+          fields: ["movies", "series", "episodes", "songs"]
+{% endif %}
+
+- Infrastructure:
+    - Kubernetes Dashboard:
+        icon: kubernetes.png
+        href: "{{ homepage_k8s_dashboard_url }}"
+        description: Cluster Management
+        widget:
+          type: kubernetes
+          cluster: {{ homepage_k8s_cluster_name | default('homelab') }}
+
+    - Proxmox:
+        icon: proxmox.png
+        href: "{{ homepage_proxmox_url }}"
+        description: Virtualization Platform
+        ping: "{{ homepage_proxmox_host }}"
+
+{% if homepage_monitoring_enabled | default(true) %}
+- Monitoring:
+    - Grafana:
+        icon: grafana.png
+        href: "{{ homepage_grafana_url }}"
+        description: Metrics & Dashboards
+        widget:
+          type: grafana
+          url: "{{ homepage_grafana_url }}"
+          key: "{{ homepage_grafana_api_key }}"
+
+    - Prometheus:
+        icon: prometheus.png
+        href: "{{ homepage_prometheus_url }}"
+        description: Metrics Collection
+        widget:
+          type: prometheus
+          url: "{{ homepage_prometheus_url }}"
+
+    - Node Exporter:
+        icon: mdi-chart-line
+        href: "{{ homepage_node_exporter_url }}"
+        description: System Metrics
+        widget:
+          type: prometheus
+          url: "{{ homepage_prometheus_url }}"
+          query: "up{job=\"node-exporter\"}"
+{% endif %}
+
+- Storage:
+    - Longhorn:
+        icon: mdi-harddisk
+        href: "{{ homepage_longhorn_url }}"
+        description: Distributed Storage
+        widget:
+          type: kubernetes
+          cluster: {{ homepage_k8s_cluster_name | default('homelab') }}
+          namespace: longhorn-system
+          label: app=longhorn-manager
+{% endif %}
+
+{% if homepage_custom_services is defined %}
+- Custom Services:
+{% for service in homepage_custom_services %}
+    - {{ service.name }}:
+        icon: {{ service.icon | default('mdi-application') }}
+        href: {{ service.url }}
+        description: {{ service.description | default('') }}
+{% if service.widget is defined %}
+        widget:
+          type: {{ service.widget.type }}
+{% for key, value in service.widget.items() %}
+{% if key != 'type' %}
+          {{ key }}: {{ value }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}

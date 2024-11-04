@@ -1,0 +1,158 @@
+---
+- name: Create homepage namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: homepage
+
+- name: Template homepage settings
+  ansible.builtin.template:
+    src: settings.yaml.j2
+    dest: /tmp/homepage-settings.yaml
+  register: settings_template
+
+
+- name: Create homepage config ConfigMap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: homepage-config
+        namespace: homepage
+      data:
+        # Config files will be populated in the next step
+        # We'll create separate ConfigMaps for each config file
+
+- name: Create homepage settings ConfigMap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: homepage-config
+        namespace: "{{ homepage_namespace }}"
+      data:
+        settings.yaml: |
+          {{ settings_template.content | from_yaml | to_nice_yaml(indent=2) }}
+
+- name: Update homepage ConfigMap with bookmarks
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: homepage-config
+        namespace: "{{ homepage_namespace }}"
+      data:
+        bookmarks.yaml: |
+          {{ bookmarks_template.content | from_yaml | to_nice_yaml(indent=2) }}
+
+- name: Update homepage ConfigMap with services
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: homepage-config
+        namespace: "{{ homepage_namespace }}"
+      data:
+        services.yaml: |
+          {{ services_template.content | from_yaml | to_nice_yaml(indent=2) }}
+
+
+- name: Deploy homepage
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: homepage
+        namespace: {{ homepage_namespace }}
+      spec:
+        replicas: {{ homepage_replicas }}
+        selector:
+          matchLabels:
+            app: homepage
+        template:
+          metadata:
+            labels:
+              app: homepage
+          spec:
+            serviceAccountName: homepage  # Add this line
+            containers:
+              - name: homepage
+                image: {{ homepage_image }}
+                ports:
+                  - containerPort: 3000
+                    name: http
+                volumeMounts:
+                  - name: config
+                    mountPath: /app/config
+            volumes:
+              - name: config
+                configMap:
+                  name: homepage-config
+
+- name: Create homepage service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: homepage
+        namespace: homepage
+      spec:
+        selector:
+          app: homepage
+        ports:
+          - protocol: TCP
+            port: 3000
+            targetPort: 3000
+
+- name: Create homepage ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: homepage-ingress
+        namespace: homepage
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "home.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: homepage
+                      port:
+                        number: 3000
+        tls:
+          - secretName: homepage-tls-cert
+            hosts:
+              - "home.{{ nginx_ingress_hostname }}"

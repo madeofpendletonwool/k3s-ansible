@@ -1,0 +1,52 @@
+# roles/homepage/templates/settings.yaml.j2
+---
+title: "{{ homepage_title | default('Homelab Dashboard') }}"
+theme: "{{ homepage_theme | default('dark') }}"
+color: "{{ homepage_color | default('blue') }}"
+startUrl: "{{ homepage_start_url | default('/') }}"
+
+# Layout configuration
+layout:
+  # Common homelab service groups
+  Infrastructure:
+    icon: mdi-server
+    style: row
+    columns: 4
+
+  Applications:
+    icon: mdi-application
+    style: row
+    columns: 4
+
+  Media:
+    icon: mdi-play-circle
+    style: row
+    columns: 4
+
+  Monitoring:
+    icon: mdi-chart-line
+    style: row
+    columns: 4
+
+  Storage:
+    icon: mdi-harddisk
+    style: row
+    columns: 4
+
+# Kubernetes specific settings
+kubernetes:
+  mode: cluster # Since we're running in a k8s cluster
+  enabled: true
+  namespace: homepage # or {{ homepage_namespace }} if you want to make it configurable
+
+# Additional UI settings
+cardBlur: sm
+iconStyle: theme
+useEqualHeights: true
+
+# Enable collapsible sections but don't start collapsed
+disableCollapse: false
+groupsInitiallyCollapsed: false
+
+# Enable 5 columns for service groups that need more space
+fiveColumns: true
