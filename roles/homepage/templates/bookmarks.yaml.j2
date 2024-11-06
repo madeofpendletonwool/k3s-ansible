@@ -2,33 +2,25 @@
 ---
 - Development:
     - GitHub:
-        - abbr: GH
+        - icon: github.png
           href: {{ homepage_bookmarks_github_url | default('https://github.com/') }}
-{% if homepage_bookmarks_github_repos is defined %}
-{% for repo in homepage_bookmarks_github_repos %}
-    - {{ repo.name }}:
-        - abbr: {{ repo.abbr | default('GH') }}
-          href: {{ repo.url }}
-          description: {{ repo.description | default('') }}
-{% endfor %}
-{% endif %}
+    - Pinepods:
+        - icon: github.png
+          href: https://github.com/madeofpendletonwool/pinepods
+          description: Pinepods Podcast Management
     - Documentation:
         - abbr: DC
           href: {{ homepage_bookmarks_docs_url | default('https://kubernetes.io/docs/home/') }}
           description: Kubernetes Documentation
 
 - Cloud & Infrastructure:
-{% if homepage_cloud_bookmarks is defined %}
-{% for bookmark in homepage_cloud_bookmarks %}
-    - {{ bookmark.name }}:
-        - icon: {{ bookmark.icon | default(bookmark.name | lower + '.png') }}
-          href: {{ bookmark.url }}
-          description: {{ bookmark.description | default('') }}
-{% endfor %}
-{% endif %}
-    - Cloudflare:
-        - icon: cloudflare.png
-          href: https://dash.cloudflare.com
+    - Vercel:
+        - icon: vercel.png
+          href: vercel.com
+          description: Site Deployment
+    - Tailscale:
+        - icon: tailscale.png
+          href: https://tailscale.com
           description: DNS & CDN Management
 
 - Homelab Management:
@@ -48,34 +40,23 @@
 - Monitoring & Logs:
     - Grafana:
         - icon: grafana.png
-          href: {{ homepage_grafana_url | default('https://grafana.local') }}
+          href: {{ homepage_grafana_url | default('https://grafana.collinpendleton.com') }}
           description: Metrics & Dashboards
     - Prometheus:
         - icon: prometheus.png
-          href: {{ homepage_prometheus_url | default('https://prometheus.local') }}
-          description: Metrics Collection
-{% if homepage_kibana_enabled | default(false) %}
-    - Kibana:
-        - icon: kibana.png
-          href: {{ homepage_kibana_url }}
-          description: Log Analysis
-{% endif %}
+          href: {{ homepage_prometheus_url | default('https://ntfy.collinpendleton.com') }}
+          description: Notifications
 
 - Network Management:
-    - Router:
+    - PF Sense Local:
         - abbr: RT
-          href: {{ homepage_router_url | default('https://router.local') }}
+          href: {{ homepage_router_url | default('http://10.0.0.1') }}
           description: Network Gateway
-    - Pi-hole:
+    - PF Sense Offsite:
+        - abbr: RT
+          href: {{ homepage_router_url | default('http://10.1.0.1') }}
+          description: Network Gateway
+    - Pi-hole Secondary:
         - icon: pihole.png
-          href: {{ homepage_pihole_url | default('https://pihole.local/admin') }}
+          href: {{ homepage_pihole_url | default('https://10.0.0.2/admin') }}
           description: Network-wide Ad Blocking
-{% if homepage_network_bookmarks is defined %}
-{% for bookmark in homepage_network_bookmarks %}
-    - {{ bookmark.name }}:
-        - icon: {{ bookmark.icon | default('') }}
-          abbr: {{ bookmark.abbr | default('') }}
-          href: {{ bookmark.url }}
-          description: {{ bookmark.description | default('') }}
-{% endfor %}
-{% endif %}

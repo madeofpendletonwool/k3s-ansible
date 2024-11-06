@@ -1,128 +1,128 @@
-# - name: Create navidrome namespace
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: v1
-#       kind: Namespace
-#       metadata:
-#         name: navidrome
+- name: Create navidrome namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: navidrome
 
-# - name: Create PVC for Navidrome data
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: v1
-#       kind: PersistentVolumeClaim
-#       metadata:
-#         name: navidrome-data-pvc
-#         namespace: navidrome
-#       spec:
-#         accessModes:
-#           - ReadWriteOnce
-#         resources:
-#           requests:
-#             storage: 2Gi
-#         storageClassName: rook-ceph-block
+- name: Create PVC for Navidrome data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: navidrome-data-pvc
+        namespace: navidrome
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: rook-ceph-block
 
-# - name: Deploy Navidrome
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: apps/v1
-#       kind: Deployment
-#       metadata:
-#         name: navidrome
-#         namespace: navidrome
-#       spec:
-#         replicas: 1
-#         strategy:
-#           type: Recreate  # For clean volume handling
-#         selector:
-#           matchLabels:
-#             app: navidrome
-#         template:
-#           metadata:
-#             labels:
-#               app: navidrome
-#           spec:
-#             terminationGracePeriodSeconds: 120
-#             containers:
-#               - name: navidrome
-#                 image: deluan/navidrome:latest
-#                 ports:
-#                   - containerPort: 4533
-#                 env:
-#                   - name: ND_SCANSCHEDULE
-#                     value: "1h"
-#                   - name: ND_LOGLEVEL
-#                     value: "info"
-#                   - name: ND_SESSIONTIMEOUT
-#                     value: "24h"
-#                 volumeMounts:
-#                   - name: data
-#                     mountPath: /data
-#                   - name: music
-#                     mountPath: /music
-#                     readOnly: true
-#                 livenessProbe:
-#                   httpGet:
-#                     path: /ping
-#                     port: 4533
-#                   initialDelaySeconds: 30
-#                 readinessProbe:
-#                   httpGet:
-#                     path: /ping
-#                     port: 4533
-#                   initialDelaySeconds: 30
-#                 lifecycle:
-#                   preStop:
-#                     exec:
-#                       command: ["/bin/sh", "-c", "sleep 10"]
-#             volumes:
-#               - name: data
-#                 persistentVolumeClaim:
-#                   claimName: navidrome-data-pvc
-#               - name: music
-#                 nfs:
-#                   server: "{{ nfs_server }}"
-#                   path: "{{ nfs_music_path }}"
+- name: Deploy Navidrome
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: navidrome
+        namespace: navidrome
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate  # For clean volume handling
+        selector:
+          matchLabels:
+            app: navidrome
+        template:
+          metadata:
+            labels:
+              app: navidrome
+          spec:
+            terminationGracePeriodSeconds: 120
+            containers:
+              - name: navidrome
+                image: deluan/navidrome:latest
+                ports:
+                  - containerPort: 4533
+                env:
+                  - name: ND_SCANSCHEDULE
+                    value: "1h"
+                  - name: ND_LOGLEVEL
+                    value: "info"
+                  - name: ND_SESSIONTIMEOUT
+                    value: "24h"
+                volumeMounts:
+                  - name: data
+                    mountPath: /data
+                  - name: music
+                    mountPath: /music
+                    readOnly: true
+                livenessProbe:
+                  httpGet:
+                    path: /ping
+                    port: 4533
+                  initialDelaySeconds: 30
+                readinessProbe:
+                  httpGet:
+                    path: /ping
+                    port: 4533
+                  initialDelaySeconds: 30
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh", "-c", "sleep 10"]
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: navidrome-data-pvc
+              - name: music
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_music_path }}"
 
-# - name: Create PodDisruptionBudget for Navidrome
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: policy/v1
-#       kind: PodDisruptionBudget
-#       metadata:
-#         name: navidrome-pdb
-#         namespace: navidrome
-#       spec:
-#         minAvailable: 1
-#         selector:
-#           matchLabels:
-#             app: navidrome
+- name: Create PodDisruptionBudget for Navidrome
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: navidrome-pdb
+        namespace: navidrome
+      spec:
+        minAvailable: 1
+        selector:
+          matchLabels:
+            app: navidrome
 
-# - name: Create Navidrome Service
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: v1
-#       kind: Service
-#       metadata:
-#         name: navidrome
-#         namespace: navidrome
-#       spec:
-#         selector:
-#           app: navidrome
-#         ports:
-#           - protocol: TCP
-#             port: 4533
-#             targetPort: 4533
+- name: Create Navidrome Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: navidrome
+        namespace: navidrome
+      spec:
+        selector:
+          app: navidrome
+        ports:
+          - protocol: TCP
+            port: 4533
+            targetPort: 4533
 
 - name: Create Navidrome Ingress
   kubernetes.core.k8s:
@@ -152,94 +152,94 @@
                         number: 4533
 
 
-# - name: Deploy Bonob
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: apps/v1
-#       kind: Deployment
-#       metadata:
-#         name: bonob
-#         namespace: navidrome
-#       spec:
-#         replicas: 1
-#         selector:
-#           matchLabels:
-#             app: bonob
-#         strategy:
-#           type: Recreate
-#         template:
-#           metadata:
-#             labels:
-#               app: bonob
-#           spec:
-#             securityContext:
-#               runAsUser: 1000
-#               runAsGroup: 1000
-#             containers:
-#               - name: bonob
-#                 image: simojenki/bonob:latest
-#                 ports:
-#                   - containerPort: 4534
-#                     name: http
-#                 env:
-#                   - name: BNB_PORT
-#                     value: "4534"
-#                   - name: BNB_URL
-#                     value: "http://bonob.{{ nginx_ingress_hostname }}"  # External URL
-#                   - name: BNB_SECRET
-#                     value: "{{ bonob_secret }}"
-#                   - name: BNB_SONOS_AUTO_REGISTER
-#                     value: "true"
-#                   - name: BNB_SONOS_DEVICE_DISCOVERY
-#                     value: "true"
-#                   - name: BNB_SONOS_SERVICE_ID
-#                     value: "246"
-#                   - name: BNB_SONOS_SEED_HOST
-#                     value: "{{ bonob_sonos_seed_host }}"
-#                   - name: BNB_SUBSONIC_URL
-#                     value: "http://navidrome:4533"  # Internal service reference
+- name: Deploy Bonob
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: bonob
+        namespace: navidrome
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: bonob
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: bonob
+          spec:
+            securityContext:
+              runAsUser: 1000
+              runAsGroup: 1000
+            containers:
+              - name: bonob
+                image: simojenki/bonob:latest
+                ports:
+                  - containerPort: 4534
+                    name: http
+                env:
+                  - name: BNB_PORT
+                    value: "4534"
+                  - name: BNB_URL
+                    value: "http://bonob.{{ nginx_ingress_hostname }}"  # External URL
+                  - name: BNB_SECRET
+                    value: "{{ bonob_secret }}"
+                  - name: BNB_SONOS_AUTO_REGISTER
+                    value: "true"
+                  - name: BNB_SONOS_DEVICE_DISCOVERY
+                    value: "true"
+                  - name: BNB_SONOS_SERVICE_ID
+                    value: "246"
+                  - name: BNB_SONOS_SEED_HOST
+                    value: "{{ bonob_sonos_seed_host }}"
+                  - name: BNB_SUBSONIC_URL
+                    value: "http://navidrome:4533"  # Internal service reference
 
-# - name: Create Bonob Service
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: v1
-#       kind: Service
-#       metadata:
-#         name: bonob
-#         namespace: navidrome
-#       spec:
-#         selector:
-#           app: bonob
-#         ports:
-#           - protocol: TCP
-#             port: 4534
-#             targetPort: 4534
+- name: Create Bonob Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: bonob
+        namespace: navidrome
+      spec:
+        selector:
+          app: bonob
+        ports:
+          - protocol: TCP
+            port: 4534
+            targetPort: 4534
 
-# - name: Create Bonob Ingress
-#   kubernetes.core.k8s:
-#     kubeconfig: "{{ kubeconfig }}"
-#     state: present
-#     definition:
-#       apiVersion: networking.k8s.io/v1
-#       kind: Ingress
-#       metadata:
-#         name: bonob-ingress
-#         namespace: navidrome
-#         annotations:
-#           traefik.ingress.kubernetes.io/router.entrypoints: web
-#       spec:
-#         rules:
-#           - host: "bonob.{{ nginx_ingress_hostname }}"
-#             http:
-#               paths:
-#                 - path: /
-#                   pathType: Prefix
-#                   backend:
-#                     service:
-#                       name: bonob
-#                       port:
-#                         number: 4534
+- name: Create Bonob Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: bonob-ingress
+        namespace: navidrome
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: "bonob.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: bonob
+                      port:
+                        number: 4534

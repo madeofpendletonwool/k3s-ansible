@@ -1,0 +1,7 @@
+---
+- name: Install pinepods
+  hosts: localhost
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  roles:
+    - role: pinepods

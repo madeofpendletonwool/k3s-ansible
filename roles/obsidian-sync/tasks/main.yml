@@ -1,0 +1,182 @@
+# roles/couchdb/tasks/main.yml
+---
+- name: Create couchdb namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: couchdb
+
+- name: Create PVC for CouchDB data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: couchdb-data-pvc
+        namespace: couchdb
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: rook-ceph-block
+
+- name: Create PVC for CouchDB config
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: couchdb-config-pvc
+        namespace: couchdb
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy CouchDB
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: couchdb
+        namespace: couchdb
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: couchdb
+        template:
+          metadata:
+            labels:
+              app: couchdb
+          spec:
+            securityContext:
+              fsGroup: 5984  # CouchDB uses this UID
+            containers:
+              - name: couchdb
+                image: couchdb:latest
+                ports:
+                  - containerPort: 5984
+                env:
+                  - name: COUCHDB_USER
+                    value: "{{ couchdb_username }}"
+                  - name: COUCHDB_PASSWORD
+                    value: "{{ couchdb_password }}"
+                volumeMounts:
+                  - name: data
+                    mountPath: /opt/couchdb/data
+                  - name: config
+                    mountPath: /opt/couchdb/etc/local.d
+                readinessProbe:
+                  httpGet:
+                    path: /_up
+                    port: 5984
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                livenessProbe:
+                  httpGet:
+                    path: /_up
+                    port: 5984
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: couchdb-data-pvc
+              - name: config
+                persistentVolumeClaim:
+                  claimName: couchdb-config-pvc
+
+- name: Create CouchDB Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: couchdb
+        namespace: couchdb
+      spec:
+        selector:
+          app: couchdb
+        ports:
+          - protocol: TCP
+            port: 5984
+            targetPort: 5984
+
+- name: Create CouchDB Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: couchdb-ingress
+        namespace: couchdb
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          # CORS headers needed for Obsidian
+          traefik.ingress.kubernetes.io/headers.accesscontrolallowmethods: "GET,PUT,POST,HEAD,DELETE"
+          traefik.ingress.kubernetes.io/headers.accesscontrolallowheaders: "accept,authorization,content-type,origin,referer"
+          traefik.ingress.kubernetes.io/headers.accesscontrolalloworiginlist: "app://obsidian.md,capacitor://localhost,http://localhost"
+          traefik.ingress.kubernetes.io/headers.accesscontrolmaxage: "3600"
+          traefik.ingress.kubernetes.io/headers.addvaryheader: "true"
+          traefik.ingress.kubernetes.io/headers.accesscontrolallowcredentials: "true"
+      spec:
+        rules:
+          - host: "couch.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: couchdb
+                      port:
+                        number: 5984
+        tls:
+          - secretName: couchdb-tls-cert
+            hosts:
+              - "couch.{{ nginx_ingress_hostname }}"
+
+
+# Add to main.yml after the other tasks
+
+- name: Wait for CouchDB to be ready
+  ansible.builtin.wait_for:
+    host: "couch.{{ nginx_ingress_hostname }}"
+    port: 443
+    timeout: 300
+
+- name: Download and run initialization script
+  ansible.builtin.shell: |
+    curl -s https://raw.githubusercontent.com/vrtmrz/obsidian-livesync/main/utils/couchdb/couchdb-init.sh | \
+    COUCHDB_USER={{ couchdb_username }} \
+    COUCHDB_PASSWORD={{ couchdb_password }} \
+    COUCHDB_URL=https://couch.{{ nginx_ingress_hostname }} \
+    bash
+  register: init_result
+
+- name: Show initialization result
+  ansible.builtin.debug:
+    var: init_result.stdout_lines

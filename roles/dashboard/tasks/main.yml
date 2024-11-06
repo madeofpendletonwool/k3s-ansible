@@ -1,0 +1,113 @@
+# roles/kubernetes-dashboard/tasks/main.yml
+---
+- name: Add kubernetes-dashboard helm repository
+  kubernetes.core.helm_repository:
+    name: kubernetes-dashboard
+    repo_url: https://kubernetes.github.io/dashboard/
+    state: present
+
+- name: Deploy kubernetes-dashboard
+  kubernetes.core.helm:
+    name: kubernetes-dashboard
+    chart_ref: kubernetes-dashboard/kubernetes-dashboard
+    release_namespace: kubernetes-dashboard
+    create_namespace: true
+    values:
+      service:
+        type: LoadBalancer
+        annotations:
+          metallb.universe.tf/allow-shared-ip: "dashboard-system"
+      extraArgs:
+        - --token-ttl=0
+        - --enable-skip-login
+        - --enable-insecure-login
+        - --disable-settings-authorizer
+      metricsScraper:
+        enabled: true
+      metrics-server:
+        enabled: false
+      ingress:
+        enabled: false  # We're using LoadBalancer instead
+
+- name: Create kubernetes-dashboard admin user
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: admin-user
+        namespace: kubernetes-dashboard
+
+- name: Create ClusterRoleBinding for admin user
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: admin-user
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: cluster-admin
+      subjects:
+        - kind: ServiceAccount
+          name: admin-user
+          namespace: kubernetes-dashboard
+
+- name: Create admin user token
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: admin-user-token
+        namespace: kubernetes-dashboard
+        annotations:
+          kubernetes.io/service-account.name: admin-user
+      type: kubernetes.io/service-account-token
+
+- name: Wait for token secret to be created
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Get admin user token
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Secret
+    name: admin-user-token
+    namespace: kubernetes-dashboard
+  register: admin_token
+
+- name: Save token to a variable
+  ansible.builtin.set_fact:
+    k8s_dashboard_token: "{{ admin_token.resources[0].data.token | b64decode }}"
+
+- name: Display Kubernetes Dashboard Token
+  ansible.builtin.debug:
+    msg: "Kubernetes Dashboard Token: {{ k8s_dashboard_token }}"
+
+- name: Wait for LoadBalancer IP
+  kubernetes.core.k8s_info:
+    kind: Service
+    namespace: kubernetes-dashboard
+    name: kubernetes-dashboard
+  register: dashboard_service
+  until: dashboard_service.resources[0].status.loadBalancer.ingress is defined
+  retries: 30
+  delay: 10
+
+- name: Get LoadBalancer IP
+  ansible.builtin.set_fact:
+    dashboard_ip: "{{ dashboard_service.resources[0].status.loadBalancer.ingress[0].ip }}"
+
+- name: Display Dashboard Access Information
+  ansible.builtin.debug:
+    msg: 
+      - "Kubernetes Dashboard is available at: https://{{ dashboard_ip }}:{{ dashboard_port | default('443') }}"
+      - "Use the token above to log in"

@@ -16,6 +16,26 @@
           showEpisodeNumber: true
           fields: ["movies", "series", "episodes", "songs"]
 {% endif %}
+    - FreshRSS:
+        icon: freshrss.png
+        href: "{{ homepage_freshrss_url }}"
+        description: RSS Aggregator
+        widget:
+          type: freshrss
+          url: "{{ homepage_freshrss_url }}"
+          username: "{{ freshrss_username }}"
+          password: "{{ freshrss_password }}"
+    - Navidrome:
+        icon: navidrome.png
+        href: "{{ navidrome_url }}"
+        description: Music Server
+        widget:
+          type: navidrome
+          url: "{{ navidrome_url }}"
+          user: username
+          token: token
+          salt: randomsalt
+
 
 - Infrastructure:
     - Kubernetes Dashboard:
@@ -25,6 +45,23 @@
         widget:
           type: kubernetes
           cluster: {{ homepage_k8s_cluster_name | default('homelab') }}
+    - Pihole:
+        icon: pihole.png
+        href: "{{ homepage_pihole_url }}"
+        description: Cluster Management
+        widget:
+          type: pihole
+          url: "{{ homepage_pihole_url }}"
+          version: 6 # required if running v6 or higher, defaults to 5
+          key: "{{ pihole_pass }}"
+    - Uptime Kuma:
+        icon: uptimekuma.png
+        href: "{{ uptime_kuma_url }}"
+        description: Cluster Management
+        widget:
+          type: uptimekuma
+          url: "{{ uptime_kuma_url }}"
+          slug: pinepods-services
 
     - Proxmox:
         icon: proxmox.png
@@ -41,37 +78,30 @@
         widget:
           type: grafana
           url: "{{ homepage_grafana_url }}"
-          key: "{{ homepage_grafana_api_key }}"
-
-    - Prometheus:
-        icon: prometheus.png
-        href: "{{ homepage_prometheus_url }}"
-        description: Metrics Collection
-        widget:
-          type: prometheus
-          url: "{{ homepage_prometheus_url }}"
-
-    - Node Exporter:
-        icon: mdi-chart-line
-        href: "{{ homepage_node_exporter_url }}"
-        description: System Metrics
-        widget:
-          type: prometheus
-          url: "{{ homepage_prometheus_url }}"
-          query: "up{job=\"node-exporter\"}"
+          username: "{{ grafana_username }}"
+          password: "{{ grafana_password}}"
 {% endif %}
 
 - Storage:
-    - Longhorn:
+    - TruNas:
+        icon: trunas.png
+        href: "{{ trunas_url }}"
+        description: Cluster Management
+        widget:
+          type: truenas
+          url: "{{ trunas_url }}"
+          username: "{{ trunas_user }}"
+          password: "{{ trunas_pass }}"
+          enablePools: false
+          nasType: scale
+    - Rook Ceph:
         icon: mdi-harddisk
-        href: "{{ homepage_longhorn_url }}"
+        href: "{{ homepage_rook_url }}"
         description: Distributed Storage
         widget:
           type: kubernetes
           cluster: {{ homepage_k8s_cluster_name | default('homelab') }}
-          namespace: longhorn-system
-          label: app=longhorn-manager
-{% endif %}
+          namespace: rook-ceph
 
 {% if homepage_custom_services is defined %}
 - Custom Services:

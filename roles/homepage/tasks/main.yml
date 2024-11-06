@@ -9,26 +9,62 @@
       metadata:
         name: homepage
 
-- name: Template homepage settings
-  ansible.builtin.template:
-    src: settings.yaml.j2
-    dest: /tmp/homepage-settings.yaml
-  register: settings_template
 
 
-- name: Create homepage config ConfigMap
+- name: Create RBAC resources
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
     definition:
       apiVersion: v1
-      kind: ConfigMap
+      kind: ServiceAccount
       metadata:
-        name: homepage-config
-        namespace: homepage
-      data:
-        # Config files will be populated in the next step
-        # We'll create separate ConfigMaps for each config file
+        name: homepage
+        namespace: "{{ homepage_namespace }}"
+
+- name: Create ClusterRole
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: homepage-reader
+      rules:
+        - apiGroups: [""]
+          resources: ["pods", "services", "namespaces"]
+          verbs: ["get", "list"]
+        - apiGroups: ["metrics.k8s.io"]
+          resources: ["pods"]
+          verbs: ["get", "list"]
+        - apiGroups: ["networking.k8s.io"]
+          resources: ["ingresses"]
+          verbs: ["get", "list"]
+        - apiGroups: ["traefik.io"]
+          resources: ["ingressroutes"]
+          verbs: ["get", "list"]
+
+- name: Create ClusterRoleBinding
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: homepage-reader
+      subjects:
+        - kind: ServiceAccount
+          name: homepage
+          namespace: "{{ homepage_namespace }}"
+      roleRef:
+        kind: ClusterRole
+        name: homepage-reader
+        apiGroup: rbac.authorization.k8s.io
+
+
+# Update your ConfigMap tasks
 
 - name: Create homepage settings ConfigMap
   kubernetes.core.k8s:
@@ -38,13 +74,12 @@
       apiVersion: v1
       kind: ConfigMap
       metadata:
-        name: homepage-config
+        name: homepage-settings
         namespace: "{{ homepage_namespace }}"
       data:
-        settings.yaml: |
-          {{ settings_template.content | from_yaml | to_nice_yaml(indent=2) }}
+        settings.yaml: "{{ lookup('template', 'settings.yaml.j2') }}"
 
-- name: Update homepage ConfigMap with bookmarks
+- name: Create homepage bookmarks ConfigMap
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -52,13 +87,12 @@
       apiVersion: v1
       kind: ConfigMap
       metadata:
-        name: homepage-config
+        name: homepage-bookmarks
         namespace: "{{ homepage_namespace }}"
       data:
-        bookmarks.yaml: |
-          {{ bookmarks_template.content | from_yaml | to_nice_yaml(indent=2) }}
+        bookmarks.yaml: "{{ lookup('template', 'bookmarks.yaml.j2') }}"
 
-- name: Update homepage ConfigMap with services
+- name: Create homepage services ConfigMap
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -66,12 +100,26 @@
       apiVersion: v1
       kind: ConfigMap
       metadata:
-        name: homepage-config
+        name: homepage-services
         namespace: "{{ homepage_namespace }}"
       data:
-        services.yaml: |
-          {{ services_template.content | from_yaml | to_nice_yaml(indent=2) }}
+        services.yaml: "{{ lookup('template', 'services.yaml.j2') }}"
 
+- name: Create homepage kubernetes ConfigMap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: homepage-kubernetes
+        namespace: "{{ homepage_namespace }}"
+      data:
+        kubernetes.yaml: "{{ lookup('template', 'kubernetes.yaml.j2') }}"
+
+# Update the deployment to use all ConfigMaps
+# Update the deployment section in your playbook
 
 - name: Deploy homepage
   kubernetes.core.k8s:
@@ -82,9 +130,9 @@
       kind: Deployment
       metadata:
         name: homepage
-        namespace: {{ homepage_namespace }}
+        namespace: "{{ homepage_namespace }}"
       spec:
-        replicas: {{ homepage_replicas }}
+        replicas: "{{ homepage_replicas }}"
         selector:
           matchLabels:
             app: homepage
@@ -93,20 +141,67 @@
             labels:
               app: homepage
           spec:
-            serviceAccountName: homepage  # Add this line
+            serviceAccountName: homepage
+            securityContext:
+              fsGroup: 1000
+            initContainers:
+              - name: init-config
+                image: busybox
+                command: ['sh', '-c']
+                args:
+                  - |
+                    mkdir -p /config-init
+                    cd /config-init
+                    cp /configmap/settings.yaml settings.yaml
+                    cp /configmap/bookmarks.yaml bookmarks.yaml
+                    cp /configmap/services.yaml services.yaml
+                    cp /configmap/kubernetes.yaml kubernetes.yaml
+                    mkdir -p logs
+                    chown -R 1000:1000 /config-init
+                volumeMounts:
+                  - name: config-dir
+                    mountPath: /config-init
+                  - name: settings
+                    mountPath: /configmap/settings.yaml
+                    subPath: settings.yaml
+                  - name: bookmarks
+                    mountPath: /configmap/bookmarks.yaml
+                    subPath: bookmarks.yaml
+                  - name: services
+                    mountPath: /configmap/services.yaml
+                    subPath: services.yaml
+                  - name: kubernetes
+                    mountPath: /configmap/kubernetes.yaml
+                    subPath: kubernetes.yaml
             containers:
               - name: homepage
-                image: {{ homepage_image }}
+                image: "{{ homepage_image }}"
                 ports:
                   - containerPort: 3000
                     name: http
                 volumeMounts:
-                  - name: config
+                  - name: config-dir
                     mountPath: /app/config
+                env:
+                  - name: PUID
+                    value: "1000"
+                  - name: PGID
+                    value: "1000"
             volumes:
-              - name: config
+              - name: config-dir
+                emptyDir: {}
+              - name: settings
                 configMap:
-                  name: homepage-config
+                  name: homepage-settings
+              - name: bookmarks
+                configMap:
+                  name: homepage-bookmarks
+              - name: services
+                configMap:
+                  name: homepage-services
+              - name: kubernetes
+                configMap:
+                  name: homepage-kubernetes
 
 - name: Create homepage service
   kubernetes.core.k8s:
