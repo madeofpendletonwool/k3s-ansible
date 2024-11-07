@@ -1,0 +1,129 @@
+# roles/babybuddy/tasks/main.yml
+---
+- name: Create babybuddy namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: babybuddy
+
+- name: Create PVC for babybuddy config
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: babybuddy-config-pvc
+        namespace: babybuddy
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Deploy babybuddy
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: babybuddy
+        namespace: babybuddy
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: babybuddy
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: babybuddy
+          spec:
+            containers:
+              - name: babybuddy
+                image: lscr.io/linuxserver/babybuddy:latest
+                env:
+                  - name: TZ
+                    value: "America/Chicago"
+                  - name: PUID
+                    value: "1000"
+                  - name: PGID
+                    value: "1000"
+                ports:
+                  - containerPort: 8000
+                    name: http
+                volumeMounts:
+                  - name: config
+                    mountPath: /config
+                readinessProbe:
+                  httpGet:
+                    path: /
+                    port: http
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                livenessProbe:
+                  httpGet:
+                    path: /
+                    port: http
+                  initialDelaySeconds: 60
+                  periodSeconds: 20
+            volumes:
+              - name: config
+                persistentVolumeClaim:
+                  claimName: babybuddy-config-pvc
+
+- name: Create babybuddy service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: babybuddy
+        namespace: babybuddy
+      spec:
+        selector:
+          app: babybuddy
+        ports:
+          - protocol: TCP
+            port: 8000
+            targetPort: 8000
+
+- name: Create babybuddy ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: babybuddy-ingress
+        namespace: babybuddy
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "baby.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: babybuddy
+                      port:
+                        number: 8000

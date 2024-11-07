@@ -83,18 +83,6 @@
                     mountPath: /opt/couchdb/data
                   - name: config
                     mountPath: /opt/couchdb/etc/local.d
-                readinessProbe:
-                  httpGet:
-                    path: /_up
-                    port: 5984
-                  initialDelaySeconds: 30
-                  periodSeconds: 10
-                livenessProbe:
-                  httpGet:
-                    path: /_up
-                    port: 5984
-                  initialDelaySeconds: 30
-                  periodSeconds: 10
             volumes:
               - name: data
                 persistentVolumeClaim:
@@ -162,21 +150,103 @@
 
 # Add to main.yml after the other tasks
 
-- name: Wait for CouchDB to be ready
-  ansible.builtin.wait_for:
-    host: "couch.{{ nginx_ingress_hostname }}"
-    port: 443
-    timeout: 300
+# roles/couchdb/tasks/main.yml
 
-- name: Download and run initialization script
-  ansible.builtin.shell: |
-    curl -s https://raw.githubusercontent.com/vrtmrz/obsidian-livesync/main/utils/couchdb/couchdb-init.sh | \
-    COUCHDB_USER={{ couchdb_username }} \
-    COUCHDB_PASSWORD={{ couchdb_password }} \
-    COUCHDB_URL=https://couch.{{ nginx_ingress_hostname }} \
-    bash
-  register: init_result
+# ... (previous tasks remain the same until initialization) ...
 
-- name: Show initialization result
-  ansible.builtin.debug:
-    var: init_result.stdout_lines
+- name: Create init ConfigMap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: couchdb-init
+        namespace: couchdb
+      data:
+        init.sh: |
+          #!/bin/sh
+          set -e
+          
+          # Wait for CouchDB to be ready
+          until curl -s http://couchdb.couchdb.svc.cluster.local:5984/_up; do
+            echo "Waiting for CouchDB..."
+            sleep 5
+          done
+          
+          # Create system databases
+          curl -X PUT http://couchdb.couchdb.svc.cluster.local:5984/_users \
+            -u "${COUCHDB_USER}:${COUCHDB_PASSWORD}"
+          
+          curl -X PUT http://couchdb.couchdb.svc.cluster.local:5984/_replicator \
+            -u "${COUCHDB_USER}:${COUCHDB_PASSWORD}"
+          
+          # Configure single node
+          curl -X POST http://couchdb.couchdb.svc.cluster.local:5984/_cluster_setup \
+            -H "Content-Type: application/json" \
+            -u "${COUCHDB_USER}:${COUCHDB_PASSWORD}" \
+            -d '{"action":"enable_single_node","username":"'"${COUCHDB_USER}"'","password":"'"${COUCHDB_PASSWORD}"'","bind_address":"0.0.0.0","port":5984,"singlenode":true}'
+          
+          # Configure CORS and other settings
+          for config in \
+            'httpd/enable_cors:true' \
+            'cors/origins:app://obsidian.md,capacitor://localhost,http://localhost' \
+            'cors/credentials:true' \
+            'cors/methods:GET, PUT, POST, HEAD, DELETE' \
+            'cors/headers:accept, authorization, content-type, origin, referer' \
+            'chttpd/max_http_request_size:4294967296' \
+            'couchdb/max_document_size:50000000'
+          do
+            KEY="${config%:*}"
+            VALUE="${config#*:}"
+            curl -X PUT "http://couchdb.couchdb.svc.cluster.local:5984/_node/nonode@nohost/_config/${KEY}" \
+              -H "Content-Type: application/json" \
+              -u "${COUCHDB_USER}:${COUCHDB_PASSWORD}" \
+              -d "\"${VALUE}\""
+          done
+
+- name: Create initialization job
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: couchdb-init
+        namespace: couchdb
+      spec:
+        ttlSecondsAfterFinished: 100
+        template:
+          spec:
+            containers:
+              - name: init
+                image: curlimages/curl:latest
+                command: ["/bin/sh", "/scripts/init.sh"]
+                env:
+                  - name: COUCHDB_USER
+                    value: "{{ couchdb_username }}"
+                  - name: COUCHDB_PASSWORD
+                    value: "{{ couchdb_password }}"
+                volumeMounts:
+                  - name: init-script
+                    mountPath: /scripts
+            volumes:
+              - name: init-script
+                configMap:
+                  name: couchdb-init
+                  defaultMode: 0777
+            restartPolicy: OnFailure
+
+- name: Wait for initialization job to complete
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig }}"
+    api_version: batch/v1
+    kind: Job
+    name: couchdb-init
+    namespace: couchdb
+  register: init_job
+  until: init_job.resources[0].status.succeeded is defined and init_job.resources[0].status.succeeded == 1
+  retries: 30
+  delay: 10
