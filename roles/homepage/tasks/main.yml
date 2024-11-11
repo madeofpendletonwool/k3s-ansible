@@ -105,6 +105,20 @@
       data:
         services.yaml: "{{ lookup('template', 'services.yaml.j2') }}"
 
+- name: Create homepage bookmarks ConfigMap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: homepage-widgets
+        namespace: "{{ homepage_namespace }}"
+      data:
+        widgets.yaml: "{{ lookup('template', 'widgets.yaml.j2') }}"
+
+
 - name: Create homepage kubernetes ConfigMap
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -156,6 +170,7 @@
                     cp /configmap/bookmarks.yaml bookmarks.yaml
                     cp /configmap/services.yaml services.yaml
                     cp /configmap/kubernetes.yaml kubernetes.yaml
+                    cp /configmap/widgets.yaml widgets.yaml
                     mkdir -p logs
                     chown -R 1000:1000 /config-init
                 volumeMounts:
@@ -173,6 +188,9 @@
                   - name: kubernetes
                     mountPath: /configmap/kubernetes.yaml
                     subPath: kubernetes.yaml
+                  - name: widgets
+                    mountPath: /configmap/widgets.yaml
+                    subPath: widgets.yaml
             containers:
               - name: homepage
                 image: "{{ homepage_image }}"
@@ -202,6 +220,9 @@
               - name: kubernetes
                 configMap:
                   name: homepage-kubernetes
+              - name: widgets
+                configMap:
+                  name: homepage-widgets
 
 - name: Create homepage service
   kubernetes.core.k8s:

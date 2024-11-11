@@ -32,9 +32,38 @@
         widget:
           type: navidrome
           url: "{{ navidrome_url }}"
-          user: username
-          token: token
-          salt: randomsalt
+          user: "{{ navidrome_user }}"
+          token: "{{ navidrome_token }}"
+          salt: "{{ navidrome_salt }}"
+# Add this to your services.yaml file under appropriate section
+    - PinePods:
+        icon: https://try.pinepods.online/static/assets/favicon.png
+        href: "{{ pinepods_url }}"
+        description: Pinepods Podcast Server
+        widget:
+          type: customapi
+          url: "{{ pinepods_url }}/api/data/get_stats?user_id=2"
+          headers:
+            api-key: "{{ pinepods_api }}"
+            Content-Type: "application/json"
+          refreshInterval: 300000  # Refresh every 5 minutes
+          mappings:
+            - field: PodcastsPlayed
+              label: "Podcasts Played"
+              format: number
+            - field: TimeListened
+              label: "Time Listened"
+              format: number
+              suffix: " minutes"
+            - field: PodcastsAdded
+              label: "Podcasts Added"
+              format: number
+            - field: EpisodesSaved
+              label: "Episodes Saved"
+              format: number
+            - field: EpisodesDownloaded
+              label: "Episodes Downloaded"
+              format: number
 
 
 - Infrastructure:
@@ -45,17 +74,26 @@
         widget:
           type: kubernetes
           cluster: {{ homepage_k8s_cluster_name | default('homelab') }}
-    - Pihole:
-        icon: pihole.png
+    - Pi-Hole Rasp:
+        icon: pi-hole.png
         href: "{{ homepage_pihole_url }}"
         description: Cluster Management
         widget:
           type: pihole
           url: "{{ homepage_pihole_url }}"
-          version: 6 # required if running v6 or higher, defaults to 5
-          key: "{{ pihole_pass }}"
+          version: 5 # required if running v6 or higher, defaults to 5
+          key: "{{ pihole_key }}"
+    - Pi-Hole VM:
+        icon: pi-hole.png
+        href: "{{ homepage_pihole_url_2 }}"
+        description: Cluster Management
+        widget:
+          type: pihole
+          url: "{{ homepage_pihole_url_2 }}"
+          version: 5 # required if running v6 or higher, defaults to 5
+          key: "{{ pihole_2_key }}"
     - Uptime Kuma:
-        icon: uptimekuma.png
+        icon: uptime-kuma.png
         href: "{{ uptime_kuma_url }}"
         description: Cluster Management
         widget:
@@ -63,11 +101,26 @@
           url: "{{ uptime_kuma_url }}"
           slug: pinepods-services
 
-    - Proxmox:
+    - Traefik:
+        icon: traefik.png
+        href: "{{ traefik_url }}"
+        description: Ingress Dashboard
+        ping: "{{ traefik_url }}"
+    - Proxmox - 11:
         icon: proxmox.png
-        href: "{{ homepage_proxmox_url }}"
+        href: "{{ homepage_proxmox_url_11 }}"
         description: Virtualization Platform
-        ping: "{{ homepage_proxmox_host }}"
+        ping: "{{ homepage_proxmox_host_11 }}"
+    - Proxmox - 12:
+        icon: proxmox.png
+        href: "{{ homepage_proxmox_url_12 }}"
+        description: Virtualization Platform
+        ping: "{{ homepage_proxmox_host_12 }}"
+    - Proxmox - 13:
+        icon: proxmox.png
+        href: "{{ homepage_proxmox_url_13 }}"
+        description: Virtualization Platform
+        ping: "{{ homepage_proxmox_host_13 }}"
 
 {% if homepage_monitoring_enabled | default(true) %}
 - Monitoring:
@@ -80,11 +133,26 @@
           url: "{{ homepage_grafana_url }}"
           username: "{{ grafana_username }}"
           password: "{{ grafana_password}}"
+    - Ntfy:
+        icon: ntfy-light.png
+        href: "{{ ntfy_url }}"
+        description: Notifications
+        container: ntfy
+        widget:
+          type: customapi
+          url: "{{ ntfy_url }}/v1/stats"
+          mappings:
+            - field: messages
+              label: Messages
+              format: number
+            - field: messages_rate
+              label: Messages/s
+              format: number
 {% endif %}
 
 - Storage:
     - TruNas:
-        icon: trunas.png
+        icon: truenas.png
         href: "{{ trunas_url }}"
         description: Cluster Management
         widget:
@@ -95,29 +163,29 @@
           enablePools: false
           nasType: scale
     - Rook Ceph:
-        icon: mdi-harddisk
-        href: "{{ homepage_rook_url }}"
-        description: Distributed Storage
-        widget:
-          type: kubernetes
-          cluster: {{ homepage_k8s_cluster_name | default('homelab') }}
-          namespace: rook-ceph
+        icon: ceph.png
+        href: "{{ rook_ceph_url }}"
+        description: HA Block Storage
+        ping: "{{ rook_ceph_url }}"
 
-{% if homepage_custom_services is defined %}
-- Custom Services:
-{% for service in homepage_custom_services %}
-    - {{ service.name }}:
-        icon: {{ service.icon | default('mdi-application') }}
-        href: {{ service.url }}
-        description: {{ service.description | default('') }}
-{% if service.widget is defined %}
-        widget:
-          type: {{ service.widget.type }}
-{% for key, value in service.widget.items() %}
-{% if key != 'type' %}
-          {{ key }}: {{ value }}
-{% endif %}
-{% endfor %}
-{% endif %}
-{% endfor %}
-{% endif %}
+- Life and Services:
+    - Baby Buddy:
+        icon: babybuddy.png
+        href: "{{ baby_buddy_url }}"
+        description: Tool to help with Baby Scheduling
+        ping: "{{ baby_buddy_url }}"
+    - oPodSync:
+        icon: podgrab.png
+        href: "{{ opodsync_url }}"
+        description: Podcast Subscription Sync between Apps
+        ping: "{{ opodsync_url }}"
+    - Syncthing:
+        icon: syncthing.png
+        href: "{{ syncthing_url }}"
+        description: File Sync between computers
+        ping: "{{ syncthing_url }}"
+    - Searxng:
+        icon: searxng.png
+        href: "{{ searxng_url }}"
+        description: Google but not Google
+        ping: "{{ searxng_url }}"

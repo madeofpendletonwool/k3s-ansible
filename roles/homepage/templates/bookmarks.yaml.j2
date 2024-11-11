@@ -9,7 +9,7 @@
           href: https://github.com/madeofpendletonwool/pinepods
           description: Pinepods Podcast Management
     - Documentation:
-        - abbr: DC
+        - icon: kubernetes.png
           href: {{ homepage_bookmarks_docs_url | default('https://kubernetes.io/docs/home/') }}
           description: Kubernetes Documentation
 
@@ -23,40 +23,28 @@
           href: https://tailscale.com
           description: DNS & CDN Management
 
-- Homelab Management:
-    - Proxmox:
-        - abbr: PX
-          href: {{ homepage_proxmox_url | default('https://proxmox.local:8006') }}
-          description: Virtual Infrastructure Manager
-    - Portainer:
-        - icon: portainer.png
-          href: {{ homepage_portainer_url | default('https://portainer.local') }}
-          description: Container Management
-    - Kubernetes Dashboard:
-        - abbr: K8
-          href: {{ homepage_k8s_dashboard_url | default('https://kubernetes.local') }}
-          description: Kubernetes Cluster Management
-
 - Monitoring & Logs:
-    - Grafana:
-        - icon: grafana.png
-          href: {{ homepage_grafana_url | default('https://grafana.collinpendleton.com') }}
-          description: Metrics & Dashboards
     - Prometheus:
         - icon: prometheus.png
-          href: {{ homepage_prometheus_url | default('https://ntfy.collinpendleton.com') }}
+          href: {{ homepage_prometheus_url }}
+          description: Notifications
+    - Alert Manager:
+        - icon: prometheus.png
+          href: {{ homepage_alert_manager_url }}
           description: Notifications
 
 - Network Management:
     - PF Sense Local:
-        - abbr: RT
-          href: {{ homepage_router_url | default('http://10.0.0.1') }}
+        - icon: pfsense.png
+          href: {{ homepage_router_onsite_url }}
           description: Network Gateway
     - PF Sense Offsite:
-        - abbr: RT
-          href: {{ homepage_router_url | default('http://10.1.0.1') }}
+        - icon: pfsense.png
+          href: {{ homepage_router_offsite_url }}
           description: Network Gateway
-    - Pi-hole Secondary:
-        - icon: pihole.png
-          href: {{ homepage_pihole_url | default('https://10.0.0.2/admin') }}
-          description: Network-wide Ad Blocking
+
+- Helpful Tools:
+    - Pinetools::
+        - icon: https://pinetools.com/files/favicon.ico
+          href: https://pinetools.com
+          description: Helpful online tools for pretty much anything
