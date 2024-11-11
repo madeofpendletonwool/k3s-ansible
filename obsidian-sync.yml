@@ -1,0 +1,7 @@
+---
+- name: Install Obsidian-sync
+  hosts: localhost
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  roles:
+    - role: obsidian-sync

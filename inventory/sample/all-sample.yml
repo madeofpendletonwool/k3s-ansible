@@ -198,3 +198,18 @@ homepage_custom_services:
       type: "gitlab"
       url: "https://gitlab.local"
       key: ""
+
+
+# roles/couchdb/defaults/main.yml
+---
+# CouchDB credentials
+couchdb_username: "admin"  # Change this
+couchdb_password: "password"  # Change this
+
+# Storage
+couchdb_data_size: "5Gi"
+couchdb_config_size: "1Gi"
+
+# Deployment
+couchdb_replicas: 1
+couchdb_image: "couchdb:latest"
