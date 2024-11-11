@@ -1,0 +1,22 @@
+# roles/homepage/templates/widgets.yaml.j2
+---
+- greeting:
+    text_size: xl
+    text: Collin's Rad Pad
+- search:
+    provider: custom
+    url: "{{ search_query_url }}"
+    target: _blank
+- datetime:
+    locale: us
+    text_size: md
+    format:
+      dateStyle: short
+      timeStyle: short
+      hour12: true
+- openmeteo:
+    timezone: America/Chicago
+    units: imperial
+    cache: 5
+    format:
+      maximumFractionDigits: 1
