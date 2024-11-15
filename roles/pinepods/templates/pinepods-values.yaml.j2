@@ -2,7 +2,7 @@
 image:
   repository: madeofpendletonwool/pinepods
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 service:
   type: ClusterIP
@@ -74,7 +74,7 @@ backend:
   image:
     repository: madeofpendletonwool/pinepods_backend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 5000
@@ -99,7 +99,7 @@ podpeople:
   image:
     repository: madeofpendletonwool/podpeople_db
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8085
@@ -111,6 +111,12 @@ podpeople:
   auth:
     adminUsername: {{ admin_username }}
     adminPassword: {{ admin_password }}
+  environment:
+    ntfyUrl: {{ ntfy_url }}
+    ntfyTopic: {{ ntfy_topic }}
+    searchApiUrl: {{ search_api_url }}
+    baseurl: {{ pod_people_base_url }}
+
   ingress:
     enabled: true
     className: ""

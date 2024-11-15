@@ -1,0 +1,250 @@
+# roles/invidious/tasks/main.yml
+---
+- name: Create invidious namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: invidious
+
+- name: Create PVC for PostgreSQL data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: postgres-data-pvc
+        namespace: invidious
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ invidious_postgres_size }}"
+        storageClassName: rook-ceph-block
+
+- name: Deploy PostgreSQL
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: invidious-db
+        namespace: invidious
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: invidious-db
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: invidious-db
+          spec:
+            containers:
+              - name: postgres
+                image: postgres:14
+                env:
+                  - name: POSTGRES_DB
+                    value: "invidious"
+                  - name: POSTGRES_USER
+                    value: "{{ invidious_db_user }}"
+                  - name: POSTGRES_PASSWORD
+                    value: "{{ invidious_db_password }}"
+                  - name: PGDATA
+                    value: "/var/lib/postgresql/data/pgdata"
+                volumeMounts:
+                  - name: postgres-data
+                    mountPath: /var/lib/postgresql/data
+                livenessProbe:
+                  exec:
+                    command:
+                      - pg_isready
+                      - -U
+                      - "{{ invidious_db_user }}"
+                      - -d
+                      - invidious
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+            volumes:
+              - name: postgres-data
+                persistentVolumeClaim:
+                  claimName: postgres-data-pvc
+
+- name: Deploy Signature Helper
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: inv-sig-helper
+        namespace: invidious
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: inv-sig-helper
+        template:
+          metadata:
+            labels:
+              app: inv-sig-helper
+          spec:
+            containers:
+              - name: inv-sig-helper
+                image: quay.io/invidious/inv-sig-helper:latest
+                args: ["--tcp", "0.0.0.0:12999"]
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                securityContext:
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop:
+                      - ALL
+
+- name: Deploy Invidious
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: invidious-server
+        namespace: invidious
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: invidious-server
+        template:
+          metadata:
+            labels:
+              app: invidious-server
+          spec:
+            containers:
+              - name: invidious
+                image: quay.io/invidious/invidious:latest
+                env:
+                  - name: INVIDIOUS_PORT
+                    value: "3000"
+                  - name: INVIDIOUS_CONFIG
+                    value: |
+                      db:
+                        dbname: invidious
+                        user: {{ invidious_db_user }}
+                        password: {{ invidious_db_password }}
+                        host: invidious-db
+                        port: 5432
+                      check_tables: true
+                      domain: "vids.{{ nginx_ingress_hostname }}"
+                      https_only: true
+                      statistics_enabled: false
+                      signature_server: inv-sig-helper.invidious.svc.cluster.local:12999
+                      visitor_data: "{{ invidious_visitor_data }}"
+                      po_token: "{{ invidious_po_token }}"
+                      hmac_key: "{{ invidious_hmac_key }}"
+                      host_binding: "0.0.0.0"
+                      external_port: 443
+                ports:
+                  - containerPort: 3000
+                    protocol: TCP
+                livenessProbe:
+                  httpGet:
+                    path: /api/v1/trending
+                    port: 3000
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+
+- name: Create PostgreSQL Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: invidious-db
+        namespace: invidious
+      spec:
+        selector:
+          app: invidious-db
+        ports:
+          - protocol: TCP
+            port: 5432
+            targetPort: 5432
+
+- name: Create Signature Helper Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: inv-sig-helper
+        namespace: invidious
+      spec:
+        selector:
+          app: inv-sig-helper
+        ports:
+          - protocol: TCP
+            port: 12999
+            targetPort: 12999
+
+- name: Create Invidious Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: invidious
+        namespace: invidious
+      spec:
+        selector:
+          app: invidious-server
+        ports:
+          - protocol: TCP
+            port: 3000
+            targetPort: 3000
+
+- name: Create Invidious Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: invidious-ingress
+        namespace: invidious
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "vids.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: invidious
+                      port:
+                        number: 3000

@@ -32,12 +32,30 @@
     var: pinepods_values_content.stdout_lines
   run_once: true
 
+# - name: Deploy Pinepods using Helm
+#   kubernetes.core.helm:
+#     name: "{{ pinepods_release_name }}"
+#     chart_ref: ~/Documents/github/PinePods/deployment/kubernetes/helm/pinepods  # Assuming chart is in local directory
+#     release_namespace: "{{ pinepods_namespace }}"
+#     values_files:
+#       - "/tmp/k3s/pinepods-values.yaml"
+#     kubeconfig: "{{ kubeconfig }}"
+#   run_once: true
+
+
+# Force deploy
 - name: Deploy Pinepods using Helm
   kubernetes.core.helm:
     name: "{{ pinepods_release_name }}"
-    chart_ref: ~/Documents/github/PinePods/deployment/kubernetes/helm/pinepods  # Assuming chart is in local directory
+    chart_ref: ~/Documents/github/PinePods/deployment/kubernetes/helm/pinepods
     release_namespace: "{{ pinepods_namespace }}"
     values_files:
       - "/tmp/k3s/pinepods-values.yaml"
     kubeconfig: "{{ kubeconfig }}"
+    force: true
+    atomic: true
+    wait: true
+    values:
+      podpeople:
+        forceRecreate: true
   run_once: true
