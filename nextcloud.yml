@@ -1,7 +1,7 @@
 ---
-- name: Configure Immich
+- name: Configure Nextcloud
   hosts: localhost
   gather_facts: false
   environment: "{{ proxy_env | default({}) }}"
   roles:
-    - role: immich
+    - role: nextcloud

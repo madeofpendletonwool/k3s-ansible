@@ -10,6 +10,25 @@
       metadata:
         name: opodsync
 
+- name: Create ConfigMap for opodsync configuration
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: opodsync-config
+        namespace: opodsync
+      data:
+        config.local.php: |
+          <?php
+          const ENABLE_SUBSCRIPTIONS = true;
+          const DEBUG = NULL;
+          const TITLE = 'Opodsync Server';
+          const BASE_URL = 'https://podsync.{{ nginx_ingress_hostname }}/';
+          const DISABLE_USER_METADATA_UPDATE = true;
+
 - name: Create PVC for opodsync data
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -59,10 +78,16 @@
                 volumeMounts:
                   - name: data
                     mountPath: /var/www/server/data
+                  - name: config
+                    mountPath: /var/www/server/data/config.local.php
+                    subPath: config.local.php
             volumes:
               - name: data
                 persistentVolumeClaim:
                   claimName: opodsync-data-pvc
+              - name: config
+                configMap:
+                  name: opodsync-config
 
 - name: Create opodsync service
   kubernetes.core.k8s:

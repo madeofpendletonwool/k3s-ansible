@@ -7,7 +7,7 @@
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: immich
+        name: nextcloud
 
 - name: Create External Service
   kubernetes.core.k8s:
@@ -17,14 +17,14 @@
       apiVersion: v1
       kind: Service
       metadata:
-        name: "immich-external"
-        namespace: immich
+        name: "nextcloud-external"
+        namespace: nextcloud
       spec:
         type: ExternalName
-        externalName: "{{ external_service_host }}"
+        externalName: "{{ external_nextcloud_host }}"
         ports:
-          - port: "{{ external_service_port }}"
-            targetPort: "{{ external_service_port }}"
+          - port: "{{ external_nextcloud_port }}"
+            targetPort: "{{ external_nextcloud_port }}"
             protocol: TCP
 
 - name: Create Ingress
@@ -35,8 +35,8 @@
       apiVersion: networking.k8s.io/v1
       kind: Ingress
       metadata:
-        name: "immich-ingress"
-        namespace: immich
+        name: "nextcloud-ingress"
+        namespace: nextcloud
         annotations:
           traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
           traefik.ingress.kubernetes.io/router.tls: "true"
@@ -45,13 +45,13 @@
           # traefik.ingress.kubernetes.io/router.middlewares: "{{ app_namespace }}-strip-prefix@kubernetescrd"
       spec:
         rules:
-          - host: "{{ app_hostname }}"
+          - host: "{{ nextcloud_hostname }}"
             http:
               paths:
                 - path: /
                   pathType: Prefix
                   backend:
                     service:
-                      name: "immich-external"
+                      name: "nextcloud-external"
                       port:
-                        number: "{{ external_service_port }}"
+                        number: "{{ external_nextcloud_port }}"

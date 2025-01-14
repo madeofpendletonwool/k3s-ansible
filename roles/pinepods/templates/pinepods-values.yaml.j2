@@ -58,7 +58,7 @@ valkey:
 
 env:
   SEARCH_API_URL: "https://search.pinepods.online/api/search"
-  PEOPLE_API_URL: "https://people.pinepods.online/api/hosts"
+  PEOPLE_API_URL: "https://people.pinepods.online"
   USERNAME: {{ admin_username }}
   PASSWORD: {{ admin_password }}
   FULLNAME: {{ admin_fullname }}
@@ -68,6 +68,8 @@ env:
   DB_NAME: "pinepods_database"
   DB_PORT: "5432"
   DEBUG_MODE: "false"
+  VALKEY_HOST: valkey
+  VALKEY_PORT: 6379
 
 backend:
   enabled: true

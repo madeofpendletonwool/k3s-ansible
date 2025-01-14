@@ -1,0 +1,80 @@
+# roles/pinepods_secondary/templates/pinepods-values.yaml.j2
+## Container image configuration
+image:
+  repository: madeofpendletonwool/pinepods
+  tag: {{ pinepods_nightly_tag | default('nightly') }}
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8040
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+  hosts:
+    - host: {{ pinepods_nightly_domain }}
+      paths:
+        - path: /
+          pathType: Prefix
+
+persistence:
+  enabled: true
+  downloads:
+    storageClass: {{ storage_class }}
+    accessMode: ReadWriteOnce
+    size: {{ downloads_size }}
+  backups:
+    storageClass: {{ storage_class }}
+    accessMode: ReadWriteOnce
+    size: {{ backups_size }}
+
+postgresql:
+  enabled: true
+  auth:
+    username: postgres
+    password: {{ postgres_password }}
+    database: pinepods_database
+  persistence:
+    enabled: true
+    storageClass: {{ storage_class }}
+    size: {{ postgres_size }}
+
+valkey:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  replica:
+    replicaCount: 0
+  primary:
+    persistence:
+      enabled: false
+  service:
+    port: 6379
+
+env:
+  SEARCH_API_URL: "https://search.pinepods.online/api/search"
+  PEOPLE_API_URL: "https://people.pinepods.online"
+  USERNAME: {{ admin_username }}
+  PASSWORD: {{ admin_password }}
+  FULLNAME: {{ admin_fullname }}
+  EMAIL: {{ admin_email }}
+  DB_TYPE: "postgresql"
+  DB_USER: "postgres"
+  DB_NAME: "pinepods_database"
+  DB_PORT: "5432"
+  DEBUG_MODE: "true"
+  VALKEY_HOST: valkey
+  VALKEY_PORT: 6379
+
+backend:
+  enabled: false
+
+# Disable podpeople and use existing instance
+podpeople:
+  enabled: false

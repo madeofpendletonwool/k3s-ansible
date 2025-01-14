@@ -1,7 +1,7 @@
 ---
-- name: Configure Immich
+- name: Install pinepods nightly
   hosts: localhost
   gather_facts: false
   environment: "{{ proxy_env | default({}) }}"
   roles:
-    - role: immich
+    - role: nightly-pinepods
