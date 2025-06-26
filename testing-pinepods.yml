@@ -1,0 +1,7 @@
+---
+- name: Configure Pinepods Testing
+  hosts: localhost
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  roles:
+    - role: testing-pinepods

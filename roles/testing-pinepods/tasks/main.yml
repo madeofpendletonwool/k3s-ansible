@@ -7,7 +7,7 @@
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: podfetch
+        name: testing-pinepods
 
 - name: Create External Service
   kubernetes.core.k8s:
@@ -17,14 +17,14 @@
       apiVersion: v1
       kind: Service
       metadata:
-        name: "podfetch-external"
-        namespace: podfetch
+        name: "pinepods-external"
+        namespace: testing-pinepods
       spec:
         type: ExternalName
-        externalName: "{{ external_podfetch_service_host }}"
+        externalName: "{{ external_pinepods_service_host }}"
         ports:
-          - port: "{{ external_podfetch_service_port }}"
-            targetPort: "{{ external_podfetch_service_port }}"
+          - port: "{{ external_pinepods_service_port }}"
+            targetPort: "{{ external_pinepods_service_port }}"
             protocol: TCP
 
 - name: Create Ingress
@@ -35,8 +35,8 @@
       apiVersion: networking.k8s.io/v1
       kind: Ingress
       metadata:
-        name: "podfetch-ingress"
-        namespace: podfetch
+        name: "pinepods-ingress"
+        namespace: testing-pinepods
         annotations:
           traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
           traefik.ingress.kubernetes.io/router.tls: "true"
@@ -45,13 +45,13 @@
           # traefik.ingress.kubernetes.io/router.middlewares: "{{ app_namespace }}-strip-prefix@kubernetescrd"
       spec:
         rules:
-          - host: "{{ podfetch_app_hostname }}"
+          - host: "{{ pinepods_app_hostname }}"
             http:
               paths:
                 - path: /
                   pathType: Prefix
                   backend:
                     service:
-                      name: "podfetch-external"
+                      name: "pinepods-external"
                       port:
-                        number: "{{ external_podfetch_service_port }}"
+                        number: "{{ external_pinepods_service_port }}"

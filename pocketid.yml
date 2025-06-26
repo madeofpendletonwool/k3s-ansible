@@ -1,0 +1,8 @@
+---
+- name: Configure Pocket ID
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  roles:
+    - role: pocket-id

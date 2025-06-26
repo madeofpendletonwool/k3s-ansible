@@ -1,0 +1,147 @@
+# roles/pocketid/tasks/main.yml
+---
+- name: Create pocketid namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: pocketid
+
+- name: Create PVC for pocketid data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: pocketid-data-pvc
+        namespace: pocketid
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: rook-ceph-block
+
+- name: Create ConfigMap for pocketid environment variables
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: pocketid-config
+        namespace: pocketid
+      data:
+        PUBLIC_APP_URL: "https://id.{{ nginx_ingress_hostname }}"
+        TRUST_PROXY: "true"
+        MAXMIND_LICENSE_KEY: "{{ maxmind_license_key | default('') }}"
+        PUID: "1000"
+        PGID: "1000"
+
+- name: Deploy pocketid
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pocketid
+        namespace: pocketid
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: pocketid
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            labels:
+              app: pocketid
+          spec:
+            containers:
+              - name: pocketid
+                image: ghcr.io/pocket-id/pocket-id:latest
+                env:
+                  - name: TZ
+                    value: "{{ timezone }}"
+                envFrom:
+                  - configMapRef:
+                      name: pocketid-config
+                ports:
+                  - containerPort: 80
+                    name: http
+                volumeMounts:
+                  - name: data
+                    mountPath: /app/backend/data
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: http
+                  initialDelaySeconds: 10
+                  periodSeconds: 90
+                  timeoutSeconds: 5
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: http
+                  initialDelaySeconds: 10
+                  periodSeconds: 90
+                  timeoutSeconds: 5
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: pocketid-data-pvc
+
+- name: Create pocketid service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: pocketid
+        namespace: pocketid
+      spec:
+        selector:
+          app: pocketid
+        ports:
+          - protocol: TCP
+            port: 80
+            targetPort: 80
+
+- name: Create pocketid ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: pocketid-ingress
+        namespace: pocketid
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "id.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: pocketid
+                      port:
+                        number: 80
