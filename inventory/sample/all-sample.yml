@@ -30,7 +30,7 @@ metal_lb_speaker_tag_version: "v0.14.8"
 metal_lb_controller_tag_version: "v0.14.8"
 
 # metallb ip range for load balancer
-metal_lb_ip_range: "10.0.0.40-10.0.0.70"
+metal_lb_ip_range: "10.0.0.50-10.0.0.90"
 
 # Enable to deploy talos onto proxmox and use that as your nodes
 proxmox_lxc_ssh_user: 'root'

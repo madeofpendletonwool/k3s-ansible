@@ -1,0 +1,70 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy Tandoor Recipe Manager
+    description: Deploy Tandoor Recipe Manager with PostgreSQL database and nginx proxy
+    options:
+      tandoor_namespace:
+        description: Kubernetes namespace for Tandoor deployment
+        type: str
+        default: tandoor
+
+      tandoor_hostname:
+        description: Hostname for Tandoor ingress
+        type: str
+        required: false
+
+      tandoor_db_name:
+        description: PostgreSQL database name
+        type: str
+        default: djangodb
+
+      tandoor_db_user:
+        description: PostgreSQL database user
+        type: str
+        default: djangouser
+
+      tandoor_db_password:
+        description: PostgreSQL database password
+        type: str
+        required: true
+
+      tandoor_secret_key:
+        description: Django secret key for Tandoor
+        type: str
+        required: true
+
+      tandoor_debug:
+        description: Enable Django debug mode
+        type: bool
+        default: false
+
+      tandoor_timezone:
+        description: Timezone for Tandoor application
+        type: str
+        default: America/Chicago
+
+      tandoor_allowed_hosts:
+        description: Allowed hosts for Tandoor application
+        type: str
+        default: "*"
+
+      tandoor_postgres_storage_size:
+        description: Storage size for PostgreSQL data
+        type: str
+        default: 5Gi
+
+      tandoor_mediafiles_storage_size:
+        description: Storage size for Tandoor media files
+        type: str
+        default: 10Gi
+
+      service_type:
+        description: Service exposure type
+        type: str
+        default: ingress
+        choices:
+          - ingress
+          - loadbalancer
+          - both
+          - clusterip

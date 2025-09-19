@@ -1,0 +1,8 @@
+---
+- name: Install Tandoor Recipe Manager
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: tandoor
+      become: true

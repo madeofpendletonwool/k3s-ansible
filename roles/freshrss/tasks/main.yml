@@ -71,7 +71,8 @@
                 persistentVolumeClaim:
                   claimName: freshrss-config-pvc
 
-- name: Create freshrss service
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create freshrss ClusterIP service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -82,13 +83,37 @@
         name: freshrss
         namespace: freshrss
       spec:
+        type: ClusterIP
         selector:
           app: freshrss
         ports:
           - protocol: TCP
             port: 80
             targetPort: 80
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create freshrss LoadBalancer service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: freshrss-lb
+        namespace: freshrss
+      spec:
+        type: LoadBalancer
+        selector:
+          app: freshrss
+        ports:
+          - protocol: TCP
+            port: 80
+            targetPort: 80
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Create freshrss ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -115,3 +140,4 @@
                       name: freshrss
                       port:
                         number: 80
+  when: service_type in ['ingress', 'both']

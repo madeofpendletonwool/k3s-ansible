@@ -106,7 +106,8 @@
           matchLabels:
             app: jellyfin
 
-- name: Create Jellyfin Service
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create Jellyfin ClusterIP Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -117,6 +118,7 @@
         name: jellyfin
         namespace: jellyfin
       spec:
+        type: ClusterIP
         selector:
           app: jellyfin
         ports:
@@ -126,7 +128,33 @@
           - name: https
             port: 8920
             targetPort: 8920
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Jellyfin LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: jellyfin-lb
+        namespace: jellyfin
+      spec:
+        type: LoadBalancer
+        selector:
+          app: jellyfin
+        ports:
+          - name: http
+            port: 8096
+            targetPort: 8096
+          - name: https
+            port: 8920
+            targetPort: 8920
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Create Jellyfin Ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -153,3 +181,4 @@
                       name: jellyfin
                       port:
                         number: 8096
+  when: service_type in ['ingress', 'both']

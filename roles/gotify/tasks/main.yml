@@ -78,7 +78,8 @@
                 persistentVolumeClaim:
                   claimName: gotify-data-pvc
 
-- name: Create gotify service
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create gotify ClusterIP service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -89,13 +90,37 @@
         name: gotify
         namespace: gotify
       spec:
+        type: ClusterIP
         selector:
           app: gotify
         ports:
           - protocol: TCP
             port: 80
             targetPort: 80
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create gotify LoadBalancer service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: gotify-lb
+        namespace: gotify
+      spec:
+        type: LoadBalancer
+        selector:
+          app: gotify
+        ports:
+          - protocol: TCP
+            port: 80
+            targetPort: 80
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Create gotify ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -122,3 +147,4 @@
                       name: gotify
                       port:
                         number: 80
+  when: service_type in ['ingress', 'both']

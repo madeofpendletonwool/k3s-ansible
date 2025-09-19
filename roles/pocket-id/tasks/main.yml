@@ -39,7 +39,7 @@
         name: pocketid-config
         namespace: pocketid
       data:
-        PUBLIC_APP_URL: "https://id.{{ nginx_ingress_hostname }}"
+        APP_URL: "https://id.{{ nginx_ingress_hostname }}"
         TRUST_PROXY: "true"
         MAXMIND_LICENSE_KEY: "{{ maxmind_license_key | default('') }}"
         PUID: "1000"
@@ -69,7 +69,7 @@
           spec:
             containers:
               - name: pocketid
-                image: ghcr.io/pocket-id/pocket-id:latest
+                image: ghcr.io/pocket-id/pocket-id:v1
                 env:
                   - name: TZ
                     value: "{{ timezone }}"
@@ -77,31 +77,32 @@
                   - configMapRef:
                       name: pocketid-config
                 ports:
-                  - containerPort: 80
+                  - containerPort: 1411
                     name: http
                 volumeMounts:
                   - name: data
                     mountPath: /app/backend/data
-                livenessProbe:
-                  httpGet:
-                    path: /health
-                    port: http
-                  initialDelaySeconds: 10
-                  periodSeconds: 90
-                  timeoutSeconds: 5
-                readinessProbe:
-                  httpGet:
-                    path: /health
-                    port: http
-                  initialDelaySeconds: 10
-                  periodSeconds: 90
-                  timeoutSeconds: 5
+                # livenessProbe:
+                #   httpGet:
+                #     path: /health
+                #     port: http
+                #   initialDelaySeconds: 10
+                #   periodSeconds: 90
+                #   timeoutSeconds: 5
+                # readinessProbe:
+                #   httpGet:
+                #     path: /health
+                #     port: http
+                #   initialDelaySeconds: 10
+                #   periodSeconds: 90
+                #   timeoutSeconds: 5
             volumes:
               - name: data
                 persistentVolumeClaim:
                   claimName: pocketid-data-pvc
 
-- name: Create pocketid service
+# Deploy PocketID ClusterIP Service (for ingress and both modes)
+- name: Create pocketid ClusterIP service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -112,13 +113,37 @@
         name: pocketid
         namespace: pocketid
       spec:
+        type: ClusterIP
         selector:
           app: pocketid
         ports:
           - protocol: TCP
-            port: 80
-            targetPort: 80
+            port: 1411
+            targetPort: 1411
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy PocketID LoadBalancer Service (for loadbalancer and both modes)
+- name: Create pocketid LoadBalancer service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: pocketid-lb
+        namespace: pocketid
+      spec:
+        type: LoadBalancer
+        selector:
+          app: pocketid
+        ports:
+          - protocol: TCP
+            port: 1411
+            targetPort: 1411
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy PocketID Ingress (for ingress and both modes)
 - name: Create pocketid ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -144,4 +169,5 @@
                     service:
                       name: pocketid
                       port:
-                        number: 80
+                        number: 1411
+  when: service_type in ['ingress', 'both']

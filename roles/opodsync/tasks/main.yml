@@ -9,6 +9,7 @@
       metadata:
         name: podfetch
 
+# Deploy External Service (for ingress and both modes)
 - name: Create External Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -26,7 +27,48 @@
           - port: "{{ external_podfetch_service_port }}"
             targetPort: "{{ external_podfetch_service_port }}"
             protocol: TCP
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+# Note: This creates a LoadBalancer that proxies to the external service
+- name: Create LoadBalancer Service for External App
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: "podfetch-lb"
+        namespace: podfetch
+      spec:
+        type: LoadBalancer
+        ports:
+          - port: "{{ external_podfetch_service_port }}"
+            targetPort: "{{ external_podfetch_service_port }}"
+            protocol: TCP
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Endpoints for LoadBalancer service
+- name: Create Endpoints for LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Endpoints
+      metadata:
+        name: "podfetch-lb"
+        namespace: podfetch
+      subsets:
+        - addresses:
+            - ip: "{{ external_podfetch_service_host }}"
+          ports:
+            - port: "{{ external_podfetch_service_port }}"
+              protocol: TCP
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Create Ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -55,3 +97,4 @@
                       name: "podfetch-external"
                       port:
                         number: "{{ external_podfetch_service_port }}"
+  when: service_type in ['ingress', 'both']

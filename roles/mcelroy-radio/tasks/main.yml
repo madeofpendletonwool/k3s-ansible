@@ -1,0 +1,495 @@
+---
+- name: Create mcelroy-radio namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ mcelroy_radio_namespace }}"
+
+- name: Create ConfigMap for fund-goal.json
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: mcelroy-radio-fund-goal
+        namespace: "{{ mcelroy_radio_namespace }}"
+      data:
+        fund-goal.json: |
+          {
+            "fund_goal": {
+              "target_amount": 60,
+              "current_amount": 0,
+              "currency": "USD",
+              "description": "At the cheapest level this costs $60 per year.",
+              "campaign_active": true,
+              "last_updated": "2025-07-02T00:00:00Z"
+            }
+          }
+
+- name: Create ConfigMap for stations.json
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: mcelroy-radio-stations
+        namespace: "{{ mcelroy_radio_namespace }}"
+      data:
+        stations.json: |
+          {
+            "stations": [
+              {
+                "id": "mcelroy_brothers",
+                "name": "McElroy Brothers",
+                "description": "Just the main three brothers",
+                "shows": ["My Brother, My Brother and Me", "The Adventure Zone"],
+                "color": "#ff7c7c",
+                "icon": "fa-users"
+              },
+              {
+                "id": "brain_fuel",
+                "name": "Brain Fuel",
+                "description": "Weird facts, history, and fascinating deep dives",
+                "shows": [
+                  "Sawbones A Marital Tour of Misguided Medicine",
+                  "Shmanners",
+                  "Secretly Incredibly Fascinating",
+                  "Run A Doctor Who Fancast"
+                ],
+                "color": "#2980b9",
+                "icon": "fa-lightbulb"
+              },
+              {
+                "id": "gametime",
+                "name": "Gametime",
+                "description": "All things games—from reviews to ridiculous ideas",
+                "shows": ["CoolGames Inc", "The Besties", "Quality Control"],
+                "color": "#e67e22",
+                "icon": "fa-gamepad"
+              },
+              {
+                "id": "short_and_sweet",
+                "name": "Short and Sweet",
+                "description": "Wholesome vibes and snackable episodes",
+                "shows": ["Positiviteeny", "Surprisingly Nice", "The Empty Bowl"],
+                "color": "#f1c40f",
+                "icon": "fa-smile"
+              },
+              {
+                "id": "mbmbam_extended",
+                "name": "MBMBaM Extended Universe",
+                "description": "Spin-offs, crossovers, and the brothers' weirdest corners",
+                "shows": [
+                  "The McElroy Brothers Will Be In Trolls World Tour",
+                  "Til Death Do Us Blart",
+                  "Trends Like These",
+                  "Interrobang with Travis and Tybee",
+                  "Positiviteeny",
+                  "Run A Doctor Who Fancast",
+                  "Surprisingly Nice",
+                  "The Kind Rewind",
+                  "Fast and Furious and Justin and Sydnee"
+                ],
+                "color": "#c0392b",
+                "icon": "fa-universe"
+              },
+              {
+                "id": "not_the_brothers",
+                "name": "Not the Brothers",
+                "description": "Shows made by McElroy family or friends, but without the brothers themselves",
+                "shows": ["Still Buffering", "Neat! The Boozcast"],
+                "color": "#95a5a6",
+                "icon": "fa-user-slash"
+              },
+              {
+                "id": "guest_spots",
+                "name": "Guest Spots",
+                "description": "Where McElroys drop in for fun, but aren't the regular hosts",
+                "shows": ["Bullseye with Jesse Thorn", "Secretly Incredibly Fascinating"],
+                "color": "#8e44ad",
+                "icon": "fa-microphone-alt"
+              }
+            ]
+          }
+
+- name: Create ConfigMap for ChopChopRSS startup.json
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: chopchoprss-startup
+        namespace: "{{ mcelroy_radio_namespace }}"
+      data:
+        startup.json: |
+          {
+            "podcasts": [
+              {
+                "name": "Joystiq Podcast",
+                "title": "Joystiq Podcast",
+                "description": "The Joystiq Podcast was the official podcast of the video game website Joystiq. It was hosted by Chris Grant, Ludwig Kietzmann and Justin McElroy. Griffin McElroy and other Joystiq staff would make appearances every once in a while. Bob Ball would appear to read select emails. Running from 2007 to 2011, this podcast was eventually cancelled, along with Joystiq's other podcast, the Xbox 360 Fancast. The two shows were merged into the Joystiq Show, and later the Super Joystiq Podcast.",
+                "author": "Justin Mcelroy",
+                "baseUrl": "https://rss.mcelroyradio.com/joystiq",
+                "audioDir": "/audio/joystiq",
+                "categories": ["Gaming", "Technology"],
+                "imageUrl": "https://rss.mcelroyradio.com/podcast-images/joystiq.jpg"
+              },
+              {
+                "name": "Jordan Jesse Go",
+                "title": "Jordan Jesse Go",
+                "description": "What is the dumbest show you can imagine? This award-winning show may be dumber. It has no content. No format. Yet it's going on ten years of delighting hundreds of thousands of people. It's been an iTunes editors choice, and Rolling Stone picked it as one of the world's best comedy podcasts. It's light in the dark, comfort in the cold and a penguin in the pants (long story). Join hosts Jesse Thorn (NPR's Bullseye) and Jordan Morris (Comedy Central's @Midnight) and a celebrity guest on a raucous, vulgar and warm-hearted romp that will probably leave you a better person. And will certainly make you dumber.",
+                "author": "Jesse Thorn",
+                "baseUrl": "https://rss.mcelroyradio.com/jordanjessego",
+                "audioDir": "/audio/jordanjessego",
+                "categories": ["Talk", "Comedy"],
+                "imageUrl": "https://rss.mcelroyradio.com/podcast-images/jordanjessego.jpg"
+              },
+              {
+                "name": "Bullseye with Jesse Thorn",
+                "title": "Bullseye with Jesse Thorn",
+                "description": "Bullseye is a celebration of the best of arts and culture in public radio form. Host Jesse Thorn sifts the wheat from the chaff to bring you in-depth interviews with the most revered and revolutionary minds in our culture. Bullseye has been featured in Time, The New York Times, GQ and McSweeney's, which called it the kind of show people listen to in a more perfect world.",
+                "author": "Jesse Thorn",
+                "baseUrl": "https://rss.mcelroyradio.com/bullseye",
+                "audioDir": "/audio/bullseye",
+                "categories": ["Talk", "Comedy"],
+                "imageUrl": "https://rss.mcelroyradio.com/podcast-images/bullseye.jpg"
+              },
+              {
+                "name": "Secretly Incredibly Fascinating",
+                "title": "Secretly Incredibly Fascinating",
+                "description": "A weekly podcast about the history, science, lore and surprises that make everyday things secretly incredibly fascinating. Hosted by comedy writer, emoji creator, and 'Jeopardy!' champion Alex Schmidt. Join Alex & his co-host Katie Goldin for a joyful deep dive into seeing the world a whole new way! (For research sources, bonus episodes, and how you can support the podcast, visit sifpod.fun.)",
+                "author": "Alex Schmidt",
+                "baseUrl": "https://rss.mcelroyradio.com/sif",
+                "audioDir": "/audio/sif",
+                "categories": ["Talk", "Comedy", "Education"],
+                "imageUrl": "https://rss.mcelroyradio.com/podcast-images/sif.png"
+              },
+              {
+                "name": "In Case of Emergency",
+                "title": "In Case of Emergency",
+                "description": "In Case of Emergency was a comedy podcast about surviving hypothetical scenarios, hosted by Travis McElroy, Jeremy Dubin, and Miranda McGee. This was Travis' second, but not last, podcast ever, and was launched in 2011.[1] It ran for about 40 episodes, but ended due to scheduling complications between the hosts. Three years later, in 2014, Travis would be part of another survival themed podcast: Bunker Buddies.",
+                "author": "Travis Mcelroy",
+                "baseUrl": "https://rss.mcelroyradio.com/incaseofemergency",
+                "audioDir": "/audio/incaseofemergency",
+                "categories": ["Talk", "Post-Apocalyptic"],
+                "imageUrl": "https://rss.mcelroyradio.com/podcast-images/incaseofemergency.jpg"
+              }
+            ]
+          }
+
+- name: Create PVC for McElroy Radio config data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: mcelroy-radio-config-pvc
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ mcelroy_radio_config_storage_size }}"
+        storageClassName: rook-ceph-block
+
+- name: Create PVC for ChopChopRSS data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: chopchoprss-data-pvc
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ mcelroy_radio_config_storage_size }}"
+        storageClassName: rook-ceph-block
+
+# Deploy ChopChopRSS first
+- name: Deploy ChopChopRSS
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: chopchoprss
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: chopchoprss
+        template:
+          metadata:
+            labels:
+              app: chopchoprss
+          spec:
+            containers:
+              - name: chopchoprss
+                image: madeofpendletonwool/chopchoprss:latest
+                ports:
+                  - containerPort: 8090
+                    name: http
+                env:
+                  - name: CHOPCHOP_CONFIG_DIR
+                    value: "/data"
+                  - name: PODCAST_BASE_URL
+                    value: "https://rss.mcelroyradio.com"
+                readinessProbe:
+                  httpGet:
+                    path: /
+                    port: 8090
+                  initialDelaySeconds: 10
+                  periodSeconds: 5
+                livenessProbe:
+                  httpGet:
+                    path: /
+                    port: 8090
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                volumeMounts:
+                  - name: chopchoprss-data
+                    mountPath: /data
+                  - name: chopchoprss-startup
+                    mountPath: /data/startup.json
+                    subPath: startup.json
+                  - name: joystiq-audio
+                    mountPath: /audio/joystiq
+                    readOnly: true
+                  - name: jordanjessego-audio
+                    mountPath: /audio/jordanjessego
+                    readOnly: true
+                  - name: sif-audio
+                    mountPath: /audio/sif
+                    readOnly: true
+                  - name: incaseofemergency-audio
+                    mountPath: /audio/incaseofemergency
+                    readOnly: true
+                  - name: bullseye-audio
+                    mountPath: /audio/bullseye
+                    readOnly: true
+            volumes:
+              - name: chopchoprss-data
+                persistentVolumeClaim:
+                  claimName: chopchoprss-data-pvc
+              - name: chopchoprss-startup
+                configMap:
+                  name: chopchoprss-startup
+              - name: joystiq-audio
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_storage_path }}/Podcasts/Joystiq Podcast"
+              - name: jordanjessego-audio
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_storage_path }}/Podcasts/Jordan Jesse GO"
+              - name: sif-audio
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_storage_path }}/Podcasts/Secretly Incredibly Fascinating"
+              - name: incaseofemergency-audio
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_storage_path }}/Podcasts/In Case of Emergency"
+              - name: bullseye-audio
+                nfs:
+                  server: "{{ nfs_server }}"
+                  path: "{{ nfs_storage_path }}/Podcasts/Bullseye with Jesse Thorn"
+
+- name: Create ChopChopRSS Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: chopchoprss
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        type: ClusterIP
+        selector:
+          app: chopchoprss
+        ports:
+          - name: http
+            port: 8090
+            targetPort: 8090
+
+# Deploy McElroy Radio second
+- name: Deploy McElroy Radio
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mcelroy-radio
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: mcelroy-radio
+        template:
+          metadata:
+            labels:
+              app: mcelroy-radio
+          spec:
+            containers:
+              - name: mcelroy-radio
+                image: "{{ mcelroy_radio_image }}"
+                ports:
+                  - containerPort: "{{ mcelroy_radio_port }}"
+                    name: http
+                env:
+                  - name: PORT
+                    value: "{{ mcelroy_radio_port | string }}"
+                  - name: RSS_FEEDS
+                    value: "{{ mcelroy_radio_rss_feeds }}"
+                  - name: ANALYTICS_PASSWORD
+                    value: "{{ mcelroy_radio_analytics_password }}"
+                livenessProbe:
+                  httpGet:
+                    path: /
+                    port: "{{ mcelroy_radio_port }}"
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+                readinessProbe:
+                  httpGet:
+                    path: /
+                    port: "{{ mcelroy_radio_port }}"
+                  initialDelaySeconds: 15
+                  periodSeconds: 10
+                volumeMounts:
+                  - name: config-storage
+                    mountPath: /opt/mcelroy-content/config
+                  - name: fund-goal-config
+                    mountPath: /opt/mcelroy-content/config/fund-goal.json
+                    subPath: fund-goal.json
+                  - name: stations-config
+                    mountPath: /opt/mcelroy-content/config/stations.json
+                    subPath: stations.json
+            volumes:
+              - name: config-storage
+                persistentVolumeClaim:
+                  claimName: mcelroy-radio-config-pvc
+              - name: fund-goal-config
+                configMap:
+                  name: mcelroy-radio-fund-goal
+              - name: stations-config
+                configMap:
+                  name: mcelroy-radio-stations
+
+# Services
+- name: Create McElroy Radio ClusterIP Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: mcelroy-radio
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        type: ClusterIP
+        selector:
+          app: mcelroy-radio
+        ports:
+          - name: http
+            port: "{{ mcelroy_radio_port }}"
+            targetPort: "{{ mcelroy_radio_port }}"
+  when: service_type in ['ingress', 'both', 'clusterip']
+
+- name: Create McElroy Radio LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: mcelroy-radio-lb
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          app: mcelroy-radio
+        ports:
+          - name: http
+            port: 8089
+            targetPort: "{{ mcelroy_radio_port }}"
+  when: service_type in ['loadbalancer', 'both']
+
+- name: Create ChopChopRSS LoadBalancer Service  
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: chopchoprss-lb
+        namespace: "{{ mcelroy_radio_namespace }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          app: chopchoprss
+        ports:
+          - name: http
+            port: 8090
+            targetPort: 8090
+  when: service_type in ['loadbalancer', 'both']
+
+- name: Create McElroy Radio Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: mcelroy-radio-ingress
+        namespace: "{{ mcelroy_radio_namespace }}"
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "mcelroy-radio.{{ nginx_ingress_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: mcelroy-radio
+                      port:
+                        number: "{{ mcelroy_radio_port }}"
+  when: service_type in ['ingress', 'both']

@@ -107,7 +107,8 @@
           matchLabels:
             app: syncthing
 
-- name: Create Syncthing Web Service
+# Deploy Syncthing Web ClusterIP Service (for ingress and both modes)
+- name: Create Syncthing Web ClusterIP Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -118,6 +119,7 @@
         name: syncthing-web
         namespace: syncthing
       spec:
+        type: ClusterIP
         selector:
           app: syncthing
         ports:
@@ -125,7 +127,31 @@
             port: 8384
             targetPort: 8384
             name: webui
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy Syncthing Web LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Syncthing Web LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: syncthing-web-lb
+        namespace: syncthing
+      spec:
+        type: LoadBalancer
+        selector:
+          app: syncthing
+        ports:
+          - protocol: TCP
+            port: 8384
+            targetPort: 8384
+            name: webui
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Syncthing Sync Service - Always LoadBalancer for sync functionality
 - name: Create Syncthing Sync Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -139,7 +165,7 @@
       spec:
         selector:
           app: syncthing
-        type: LoadBalancer  # Since we need direct access for sync
+        type: LoadBalancer  # Always LoadBalancer for sync functionality
         ports:
           - protocol: TCP
             port: 22000
@@ -154,6 +180,7 @@
             targetPort: 21027
             name: discovery
 
+# Deploy Syncthing Web Ingress (for ingress and both modes)
 - name: Create Syncthing Web Ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -180,3 +207,4 @@
                       name: syncthing-web
                       port:
                         number: 8384
+  when: service_type in ['ingress', 'both']

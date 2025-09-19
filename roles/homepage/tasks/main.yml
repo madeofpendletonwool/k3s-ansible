@@ -224,7 +224,8 @@
                 configMap:
                   name: homepage-widgets
 
-- name: Create homepage service
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create homepage ClusterIP service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -235,13 +236,37 @@
         name: homepage
         namespace: homepage
       spec:
+        type: ClusterIP
         selector:
           app: homepage
         ports:
           - protocol: TCP
             port: 3000
             targetPort: 3000
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create homepage LoadBalancer service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: homepage-lb
+        namespace: homepage
+      spec:
+        type: LoadBalancer
+        selector:
+          app: homepage
+        ports:
+          - protocol: TCP
+            port: 3000
+            targetPort: 3000
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Create homepage ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -272,3 +297,4 @@
           - secretName: homepage-tls-cert
             hosts:
               - "home.{{ nginx_ingress_hostname }}"
+  when: service_type in ['ingress', 'both']

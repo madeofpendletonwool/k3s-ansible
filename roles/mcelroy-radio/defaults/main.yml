@@ -1,0 +1,17 @@
+---
+# McElroy Radio configuration
+mcelroy_radio_namespace: mcelroy-radio
+mcelroy_radio_image: madeofpendletonwool/mcelroy-radio:latest
+
+# Application configuration
+mcelroy_radio_port: 8080
+mcelroy_radio_analytics_password: "{{ mcelroy_radio_analytics_password_value | default('mcelroyradio') }}"
+
+# RSS Feeds configuration
+mcelroy_radio_rss_feeds: "Joystiq Podcast:http://chopchoprss:8090/joystiq,Jordan Jesse Go:http://chopchoprss:8090/jordanjessego,Bullseye with Jesse Thorn:http://chopchoprss:8090/bullseye,Secretly Incredibly Fascinating:http://chopchoprss:8090/sif,In Case of Emergency:http://chopchoprss:8090/incaseofemergency,My Brother My Brother and Me:https://feeds.simplecast.com/wjQvYtdl,The Adventure Zone:https://feeds.simplecast.com/cYQVc__c,Run A Doctor Who Fancast:https://rundw.libsyn.com/rss,The McElroy Brothers Will Be In Trolls World Tour:https://trolls2.libsyn.com/rss,Trends Like These:https://trendslikethese.libsyn.com/rss,CoolGames Inc:https://feeds.megaphone.fm/coolgames-inc,The Kind Rewind:https://thekindrewind.libsyn.com/rss,The Empty Bowl:https://anchor.fm/s/6ccfb04/podcast/rss,Interrobang with Travis and Tybee:https://interrobangcast.libsyn.com/rss,Wonderful:https://feeds.simplecast.com/w1teXNny,Bake On:https://feeds.simplecast.com/Rhhgs26M,Still Buffering:https://feeds.simplecast.com/n8ppsCKR,Sawbones:https://feeds.simplecast.com/y1LF_sn2,Shmanners:https://feeds.simplecast.com/rRcaqFt4,Surprisingly Nice:https://surprisinglynice.libsyn.com/rss,The Besties:https://feeds.simplecast.com/Urk3897_,Quality Control:https://feeds.megaphone.fm/qualitycontrol,Til Death Do Us Blart:https://feeds.acast.com/public/shows/66e25e2a9a7dcc160e7c1211,Positiviteeny:https://anchor.fm/s/67f70a0/podcast/rss,Fast and Furious and Justin and Sydnee:https://feeds.simplecast.com/OAsA7G6V,Bad Vibes:https://feeds.megaphone.fm/QCD5976088508,Neat! The Boozcast:https://audioboom.com/channels/5042841.rss"
+
+# Storage configuration
+mcelroy_radio_config_storage_size: 1Gi
+
+# Service configuration - LoadBalancer by default
+service_type: loadbalancer

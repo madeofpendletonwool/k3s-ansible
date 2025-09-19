@@ -1,0 +1,29 @@
+---
+galaxy_info:
+  author: Collin Pendleton
+  description: Deploy PinePods Backend API service to Kubernetes
+  company: Gooseberry Development
+  license: MIT
+  min_ansible_version: "2.11"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  galaxy_tags:
+    - kubernetes
+    - k3s
+    - pinepods
+    - podcast
+    - api
+    - backend
+    - rust
+    - actix
+
+dependencies:
+  - role: k3s_server_post
+    when: inventory_hostname in groups[group_name_master][0]

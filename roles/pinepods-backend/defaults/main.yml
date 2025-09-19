@@ -1,0 +1,75 @@
+---
+# PinePods Backend defaults
+
+# Backend configuration
+pinepods_backend_namespace: pinepods-backend
+pinepods_backend_image: madeofpendletonwool/pinepods_backend:latest
+pinepods_backend_replica_count: 1
+
+# Network configuration
+pinepods_backend_port: 5000
+pinepods_backend_service_port: 5000
+
+# Resource limits
+pinepods_backend_cpu_request: "100m"
+pinepods_backend_cpu_limit: "500m"
+pinepods_backend_memory_request: "128Mi"
+pinepods_backend_memory_limit: "512Mi"
+
+# API credentials for Podcast Index API
+pinepods_backend_api_key: ""
+pinepods_backend_api_secret: ""
+
+# YouTube Data API v3 key for YouTube channel search
+pinepods_backend_youtube_api_key: ""
+
+# Logging configuration
+pinepods_backend_rust_log: "info"
+
+# Environment variables
+pinepods_backend_env_vars:
+  - name: RUST_LOG
+    value: "{{ pinepods_backend_rust_log }}"
+  - name: API_KEY
+    value: "{{ pinepods_backend_api_key }}"
+  - name: API_SECRET
+    value: "{{ pinepods_backend_api_secret }}"
+  - name: YOUTUBE_API_KEY
+    value: "{{ pinepods_backend_youtube_api_key }}"
+
+# Service configuration (supports service_type from global config)
+# service_type options: ingress, loadbalancer, both, clusterip
+
+# Ingress configuration
+pinepods_backend_ingress_host: "pinepods-backend.{{ nginx_ingress_hostname | default('localhost') }}"
+pinepods_backend_ingress_tls: true
+
+# Storage configuration
+pinepods_backend_storage_enabled: false
+pinepods_backend_storage_size: "1Gi"
+pinepods_backend_storage_class: "rook-ceph-block"
+
+# Health check configuration
+pinepods_backend_health_check_enabled: true
+pinepods_backend_liveness_probe_path: "/api/stats"
+pinepods_backend_readiness_probe_path: "/api/stats"
+pinepods_backend_probe_initial_delay: 30
+pinepods_backend_probe_period: 10
+pinepods_backend_probe_timeout: 5
+pinepods_backend_probe_failure_threshold: 3
+
+# Security context
+pinepods_backend_security_context:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# Pod disruption budget
+pinepods_backend_pdb_enabled: true
+pinepods_backend_pdb_min_available: 1

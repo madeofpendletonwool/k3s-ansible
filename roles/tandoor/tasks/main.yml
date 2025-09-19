@@ -1,0 +1,274 @@
+---
+- name: Create tandoor namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ tandoor_namespace }}"
+
+- name: Create ConfigMap for Tandoor environment
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: tandoor-config
+        namespace: "{{ tandoor_namespace }}"
+      data:
+        DEBUG: "{{ '1' if tandoor_debug else '0' }}"
+        SQL_DEBUG: "0"
+        ALLOWED_HOSTS: "{{ tandoor_allowed_hosts }}"
+        SECRET_KEY: "{{ tandoor_secret_key }}"
+        TIMEZONE: "{{ tandoor_timezone }}"
+        DB_ENGINE: "django.db.backends.postgresql"
+        POSTGRES_HOST: "tandoor-postgres"
+        POSTGRES_PORT: "5432"
+        POSTGRES_USER: "{{ tandoor_db_user }}"
+        POSTGRES_PASSWORD: "{{ tandoor_db_password }}"
+        POSTGRES_DB: "{{ tandoor_db_name }}"
+        FRACTION_PREF_DEFAULT: "0"
+        COMMENT_PREF_DEFAULT: "1"
+        SHOPPING_MIN_AUTOSYNC_INTERVAL: "5"
+        GUNICORN_MEDIA: "0"
+        WEB_CONCURRENCY: "1"
+        REVERSE_PROXY_AUTH: "0"
+
+- name: Create PVC for PostgreSQL data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: tandoor-postgres-pvc
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ tandoor_postgres_storage_size }}"
+        storageClassName: rook-ceph-block
+
+- name: Create PVC for Tandoor media files
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: tandoor-mediafiles-pvc
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ tandoor_mediafiles_storage_size }}"
+        storageClassName: rook-ceph-block
+
+- name: Deploy PostgreSQL database
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: tandoor-postgres
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: tandoor-postgres
+        template:
+          metadata:
+            labels:
+              app: tandoor-postgres
+          spec:
+            containers:
+              - name: postgres
+                image: "{{ tandoor_postgres_image }}"
+                env:
+                  - name: POSTGRES_DB
+                    value: "{{ tandoor_db_name }}"
+                  - name: POSTGRES_USER
+                    value: "{{ tandoor_db_user }}"
+                  - name: POSTGRES_PASSWORD
+                    value: "{{ tandoor_db_password }}"
+                ports:
+                  - containerPort: 5432
+                    name: postgres
+                volumeMounts:
+                  - name: postgres-data
+                    mountPath: /var/lib/postgresql/data
+                    subPath: pgdata
+            volumes:
+              - name: postgres-data
+                persistentVolumeClaim:
+                  claimName: tandoor-postgres-pvc
+
+- name: Create PostgreSQL service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: tandoor-postgres
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        type: ClusterIP
+        selector:
+          app: tandoor-postgres
+        ports:
+          - name: postgres
+            port: 5432
+            targetPort: 5432
+
+- name: Deploy Tandoor application (web + nginx)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: tandoor
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: tandoor
+        template:
+          metadata:
+            labels:
+              app: tandoor
+          spec:
+            containers:
+              - name: tandoor-web
+                image: "{{ tandoor_web_image }}"
+                envFrom:
+                  - configMapRef:
+                      name: tandoor-config
+                ports:
+                  - containerPort: 8080
+                    name: web
+                volumeMounts:
+                  - name: staticfiles
+                    mountPath: /opt/recipes/staticfiles
+                  - name: nginx-config
+                    mountPath: /opt/recipes/nginx/conf.d
+                  - name: mediafiles
+                    mountPath: /opt/recipes/mediafiles
+              - name: nginx
+                image: "{{ tandoor_nginx_image }}"
+                envFrom:
+                  - configMapRef:
+                      name: tandoor-config
+                ports:
+                  - containerPort: 80
+                    name: http
+                volumeMounts:
+                  - name: nginx-config
+                    mountPath: /etc/nginx/conf.d
+                    readOnly: true
+                  - name: staticfiles
+                    mountPath: /static
+                    readOnly: true
+                  - name: mediafiles
+                    mountPath: /media
+                    readOnly: true
+            volumes:
+              - name: staticfiles
+                emptyDir: {}
+              - name: nginx-config
+                emptyDir: {}
+              - name: mediafiles
+                persistentVolumeClaim:
+                  claimName: tandoor-mediafiles-pvc
+
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create Tandoor ClusterIP Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: tandoor
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        type: ClusterIP
+        selector:
+          app: tandoor
+        ports:
+          - name: http
+            port: 80
+            targetPort: 80
+  when: service_type in ['ingress', 'both', 'clusterip']
+
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Tandoor LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: tandoor-lb
+        namespace: "{{ tandoor_namespace }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          app: tandoor
+        ports:
+          - name: http
+            port: 8092
+            targetPort: 80
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
+- name: Create Tandoor Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: tandoor-ingress
+        namespace: "{{ tandoor_namespace }}"
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "{{ tandoor_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: tandoor
+                      port:
+                        number: 80
+  when: service_type in ['ingress', 'both']

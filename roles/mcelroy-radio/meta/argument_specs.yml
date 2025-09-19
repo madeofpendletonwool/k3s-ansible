@@ -1,0 +1,45 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy McElroy Radio
+    description: Deploy McElroy Radio podcast streaming application
+    options:
+      mcelroy_radio_namespace:
+        description: Kubernetes namespace for McElroy Radio deployment
+        type: str
+        default: mcelroy-radio
+
+      mcelroy_radio_image:
+        description: Container image for McElroy Radio
+        type: str
+        default: madeofpendletonwool/mcelroy-radio:latest
+
+      mcelroy_radio_port:
+        description: Port for McElroy Radio application
+        type: int
+        default: 8080
+
+      mcelroy_radio_analytics_password:
+        description: Password for analytics access
+        type: str
+        required: false
+
+      mcelroy_radio_rss_feeds:
+        description: Comma-separated list of RSS feeds with names
+        type: str
+        required: false
+
+      mcelroy_radio_config_storage_size:
+        description: Storage size for configuration data
+        type: str
+        default: 1Gi
+
+      service_type:
+        description: Service exposure type
+        type: str
+        default: loadbalancer
+        choices:
+          - ingress
+          - loadbalancer
+          - both
+          - clusterip

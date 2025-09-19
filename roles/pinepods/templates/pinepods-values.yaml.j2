@@ -5,11 +5,28 @@ image:
   pullPolicy: Always
 
 service:
+{% if service_type in ['loadbalancer', 'both'] %}
+  type: LoadBalancer
+{% else %}
   type: ClusterIP
+{% endif %}
   port: 8040
 
+# Resource allocation for better performance
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "2Gi"
+    cpu: "1000m"
+
 ingress:
+{% if service_type in ['ingress', 'both'] %}
   enabled: true
+{% else %}
+  enabled: false
+{% endif %}
   className: ""
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
@@ -42,6 +59,13 @@ postgresql:
     enabled: true
     storageClass: {{ storage_class }}
     size: {{ postgres_size }}
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
 
 valkey:
   enabled: true
@@ -78,7 +102,11 @@ backend:
     tag: latest
     pullPolicy: Always
   service:
+{% if service_type in ['loadbalancer', 'both'] %}
+    type: LoadBalancer
+{% else %}
     type: ClusterIP
+{% endif %}
     port: 5000
   secrets:
     apiKey: {{ backend_api_key }}
@@ -103,7 +131,11 @@ podpeople:
     tag: latest
     pullPolicy: Always
   service:
+{% if service_type in ['loadbalancer', 'both'] %}
+    type: LoadBalancer
+{% else %}
     type: ClusterIP
+{% endif %}
     port: 8085
   persistence:
     enabled: true

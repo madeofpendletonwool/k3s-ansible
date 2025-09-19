@@ -1,0 +1,8 @@
+---
+- name: Install McElroy Radio
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: mcelroy-radio
+      become: true

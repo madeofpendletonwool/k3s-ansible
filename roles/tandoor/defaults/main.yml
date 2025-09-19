@@ -1,0 +1,27 @@
+---
+# Tandoor Recipe Manager configuration
+tandoor_namespace: tandoor
+tandoor_hostname: tandoor.{{ nginx_ingress_hostname }}
+
+# Database configuration
+tandoor_db_name: djangodb
+tandoor_db_user: djangouser
+tandoor_db_password: "{{ tandoor_database_password | default('changeme') }}"
+
+# Application configuration
+tandoor_secret_key: "{{ tandoor_secret_key_value | default('changeme-generate-random-key') }}"
+tandoor_debug: false
+tandoor_timezone: "{{ system_timezone | default('America/Chicago') }}"
+tandoor_allowed_hosts: "*"
+
+# Image versions
+tandoor_postgres_image: postgres:12-alpine
+tandoor_web_image: vabene1111/recipes:latest
+tandoor_nginx_image: nginx:mainline-alpine
+
+# Storage configuration
+tandoor_postgres_storage_size: 5Gi
+tandoor_mediafiles_storage_size: 10Gi
+
+# Service configuration - follows project pattern
+service_type: loadbalancer

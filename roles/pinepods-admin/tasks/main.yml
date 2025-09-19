@@ -1,0 +1,476 @@
+- name: Create pinepods-admin namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ pinepods_admin_namespace }}"
+
+- name: Create PVC for Pinepods Admin data
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: pinepods-admin-data-pvc
+        namespace: "{{ pinepods_admin_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ pinepods_admin_data_storage_size }}"
+        storageClassName: rook-ceph-block
+
+- name: Create PVC for Pinepods Admin config
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: pinepods-admin-config-pvc
+        namespace: "{{ pinepods_admin_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ pinepods_admin_config_storage_size }}"
+        storageClassName: rook-ceph-block
+
+- name: Create Secret for Pinepods Admin
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: pinepods-admin-secret
+        namespace: "{{ pinepods_admin_namespace }}"
+      type: Opaque
+      stringData:
+        ADMIN_PASSWORD: "{{ pinepods_admin_password }}"
+        SMTP_PASSWORD: "{{ pinepods_admin_smtp_password }}"
+        SMTP_USERNAME: "{{ pinepods_admin_smtp_username }}"
+        DB_PASSWORD: "{{ pinepods_admin_db_password | default('') }}"
+
+- name: Create ConfigMap for Pinepods Admin
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: pinepods-admin-config
+        namespace: "{{ pinepods_admin_namespace }}"
+      data:
+        PORT: "{{ pinepods_admin_port | string }}"
+        HOST: "0.0.0.0"
+        DEBUG: "false"
+        DB_TYPE: "{{ pinepods_admin_db_type }}"
+        DB_NAME: "{{ pinepods_admin_db_name }}"
+        NTFY_ENABLED: "{{ pinepods_admin_ntfy_enabled | string | lower }}"
+        NTFY_URL: "{{ pinepods_admin_ntfy_url }}"
+        NTFY_TOPIC: "{{ pinepods_admin_ntfy_topic }}"
+        ADMIN_USERNAME: "{{ pinepods_admin_username }}"
+        FEEDBACK_EMAIL: "{{ pinepods_admin_feedback_email }}"
+        GOOGLE_SERVICE_ACCOUNT_FILE: "/app/config/service-account.json"
+        GOOGLE_PACKAGE_NAME: "{{ pinepods_admin_google_package_name }}"
+        SMTP_HOST: "{{ pinepods_admin_smtp_host }}"
+        SMTP_PORT: "{{ pinepods_admin_smtp_port | string }}"
+        SMTP_FROM: "{{ pinepods_admin_smtp_from }}"
+        CORS_ORIGINS: "{{ pinepods_admin_cors_origins }}"
+
+- name: Create Config YAML ConfigMap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: pinepods-admin-config-yaml
+        namespace: "{{ pinepods_admin_namespace }}"
+      data:
+        config.yaml: |
+          server:
+            port: "{{ pinepods_admin_port }}"
+            host: "0.0.0.0"
+            debug: false
+            cors_origins:
+              - "*"
+            rate_limiting:
+              enabled: true
+              requests_per_minute: 60
+          
+          database:
+            type: "sqlite"
+            database: "/app/data/forms.db"
+          
+          email:
+            provider: "smtp"
+            smtp:
+              host: "{{ pinepods_admin_smtp_host }}"
+              port: {{ pinepods_admin_smtp_port }}
+              username: ""
+              password: ""
+              from: ""
+          
+          notifications:
+            ntfy:
+              enabled: {{ pinepods_admin_ntfy_enabled | lower }}
+              url: "{{ pinepods_admin_ntfy_url }}"
+              topic: "{{ pinepods_admin_ntfy_topic }}"
+              token: ""
+          
+          forms:
+            storage_dir: "/app/submissions"
+            forms:
+              internal-testing-signup:
+                name: "PinePods Internal Testing Sign-up"
+                description: "Sign up for early access to PinePods beta versions"
+                fields:
+                  - name: "name"
+                    type: "text"
+                    required: true
+                    label: "Full Name"
+                    placeholder: "Enter your full name"
+                  - name: "email"
+                    type: "email"
+                    required: true
+                    label: "Email Address"
+                    placeholder: "Enter your email address"
+                    validation: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+                  - name: "platform"
+                    type: "select"
+                    required: true
+                    label: "Platform"
+                    placeholder: "android"
+                  - name: "wantsNews"
+                    type: "boolean"
+                    required: false
+                    label: "Wants News Updates"
+                    placeholder: "false"
+                  - name: "newsEmail"
+                    type: "email"
+                    required: false
+                    label: "News Email Address"
+                    placeholder: "Optional news email"
+                actions:
+                  - type: "google_play_add_tester"
+                    config:
+                      track: "internal"
+                  - type: "send_email"
+                    config:
+                      template: "internal-testing"
+                  - type: "log"
+                    config:
+                      message: "New internal testing signup processed"
+                validation:
+                  max_submissions_per_hour: 10
+                  require_captcha: false
+                email:
+                  enabled: true
+                  template: "internal-testing"
+                  subject: "Welcome to PinePods Internal Testing!"
+                  send_confirmation: true
+              
+              contact-form:
+                name: "Contact Form"
+                description: "General contact form for inquiries"
+                fields:
+                  - name: "name"
+                    type: "text"
+                    required: true
+                    label: "Name"
+                    placeholder: "Your name"
+                  - name: "email"
+                    type: "email"
+                    required: true
+                    label: "Email"
+                    placeholder: "your.email@example.com"
+                  - name: "subject"
+                    type: "text"
+                    required: true
+                    label: "Subject"
+                    placeholder: "What is this about?"
+                  - name: "message"
+                    type: "textarea"
+                    required: true
+                    label: "Message"
+                    placeholder: "Your message here..."
+                actions:
+                  - type: "send_email"
+                    config:
+                      template: "confirmation"
+                  - type: "log"
+                    config:
+                      message: "New contact form submission"
+                validation:
+                  max_submissions_per_hour: 5
+                  require_captcha: false
+                email:
+                  enabled: true
+                  template: "confirmation"
+                  subject: "Thank you for contacting us!"
+                  send_confirmation: true
+              
+              feedback-form:
+                name: "Feedback Form"
+                description: "Submit feedback, bug reports, and feature requests"
+                fields:
+                  - name: "feedback"
+                    type: "textarea"
+                    required: true
+                    label: "Your Feedback"
+                    placeholder: "Tell us what you think, report a bug, or suggest a feature..."
+                  - name: "email"
+                    type: "email"
+                    required: false
+                    label: "Email (optional)"
+                    placeholder: "your.email@example.com"
+                  - name: "platform"
+                    type: "select"
+                    required: false
+                    label: "Platform"
+                    placeholder: "web"
+                  - name: "category"
+                    type: "select"
+                    required: false
+                    label: "Category"
+                    placeholder: "general"
+                  - name: "page"
+                    type: "text"
+                    required: false
+                    label: "Page/Feature (optional)"
+                    placeholder: "Which page or feature is this about?"
+                actions:
+                  - type: "send_feedback_email"
+                    config:
+                      template: "feedback-notification"
+                  - type: "log"
+                    config:
+                      message: "New feedback submission received"
+                validation:
+                  max_submissions_per_hour: 10
+                  require_captcha: false
+                email:
+                  enabled: true
+                  template: "feedback-confirmation"
+                  subject: "Thanks for your feedback!"
+                  send_confirmation: true
+          
+          google_play:
+            service_account_file: "/app/config/service-account.json"
+            package_name: "{{ pinepods_admin_google_package_name }}"
+          
+          analytics:
+            enabled: true
+            secret_key: ""
+          
+          admin:
+            username: ""
+            password: ""
+          
+          feedback:
+            recipient_email: ""
+
+- name: Create Google Service Account Secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: pinepods-admin-google-secret
+        namespace: "{{ pinepods_admin_namespace }}"
+      type: Opaque
+      data:
+        service-account.json: "{{ lookup('file', pinepods_admin_google_service_account_file) | default('{}') | b64encode }}"
+
+- name: Deploy Pinepods Admin
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pinepods-admin
+        namespace: "{{ pinepods_admin_namespace }}"
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: pinepods-admin
+        template:
+          metadata:
+            labels:
+              app: pinepods-admin
+          spec:
+            terminationGracePeriodSeconds: 60
+            initContainers:
+              - name: init-directories
+                image: busybox:1.36
+                command: ['sh', '-c']
+                args:
+                  - |
+                    echo "Creating necessary directories..."
+                    mkdir -p /app/data /app/configs /app/submissions
+                    echo "Setting permissions..."
+                    chmod 777 /app/data /app/configs /app/submissions
+                    echo "Creating empty database file with proper permissions..."
+                    touch /app/data/forms.db
+                    chmod 666 /app/data/forms.db
+                    echo "Directories initialized successfully"
+                volumeMounts:
+                  - name: data
+                    mountPath: /app/data
+                  - name: config
+                    mountPath: /app/configs
+                  - name: submissions
+                    mountPath: /app/submissions
+            containers:
+              - name: pinepods-admin
+                image: "{{ pinepods_admin_image }}"
+                securityContext:
+                  runAsUser: 0
+                  runAsGroup: 0
+                ports:
+                  - containerPort: "{{ pinepods_admin_port }}"
+                    name: http
+                envFrom:
+                  - configMapRef:
+                      name: pinepods-admin-config
+                  - secretRef:
+                      name: pinepods-admin-secret
+                volumeMounts:
+                  - name: data
+                    mountPath: /app/data
+                  - name: config
+                    mountPath: /app/configs
+                  - name: submissions
+                    mountPath: /app/submissions
+                  - name: google-config
+                    mountPath: /app/config
+                    readOnly: true
+                  - name: config-yaml
+                    mountPath: /app/configs/config.yaml
+                    subPath: config.yaml
+                    readOnly: true
+                args: ["-config", "/app/configs/config.yaml"]
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: "{{ pinepods_admin_port }}"
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+                  timeoutSeconds: 10
+                  successThreshold: 1
+                  failureThreshold: 3
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: "{{ pinepods_admin_port }}"
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 10
+                  successThreshold: 1
+                  failureThreshold: 3
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: pinepods-admin-data-pvc
+              - name: config
+                persistentVolumeClaim:
+                  claimName: pinepods-admin-config-pvc
+              - name: submissions
+                emptyDir: {}
+              - name: google-config
+                secret:
+                  secretName: pinepods-admin-google-secret
+              - name: config-yaml
+                configMap:
+                  name: pinepods-admin-config-yaml
+
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create Pinepods Admin ClusterIP Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: pinepods-admin
+        namespace: "{{ pinepods_admin_namespace }}"
+      spec:
+        type: ClusterIP
+        selector:
+          app: pinepods-admin
+        ports:
+          - name: http
+            port: "{{ pinepods_admin_port }}"
+            targetPort: "{{ pinepods_admin_port }}"
+  when: service_type in ['ingress', 'both', 'clusterip']
+
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Pinepods Admin LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: pinepods-admin-lb
+        namespace: "{{ pinepods_admin_namespace }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          app: pinepods-admin
+        ports:
+          - name: http
+            port: "{{ pinepods_admin_port }}"
+            targetPort: "{{ pinepods_admin_port }}"
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
+- name: Create Pinepods Admin Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: pinepods-admin-ingress
+        namespace: "{{ pinepods_admin_namespace }}"
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      spec:
+        rules:
+          - host: "{{ pinepods_admin_hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: pinepods-admin
+                      port:
+                        number: "{{ pinepods_admin_port }}"
+  when: service_type in ['ingress', 'both']

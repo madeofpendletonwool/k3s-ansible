@@ -1,0 +1,186 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy PinePods Backend API service
+    description: |
+      Deploys the PinePods Backend API service to Kubernetes.
+      This service provides search and API functionality for PinePods,
+      supporting iTunes, Podcast Index, and YouTube Data API integrations.
+    options:
+      # Backend configuration
+      pinepods_backend_namespace:
+        description: Kubernetes namespace for PinePods Backend
+        type: str
+        default: pinepods-backend
+
+      pinepods_backend_image:
+        description: Container image for PinePods Backend
+        type: str
+        default: madeofpendletonwool/pinepods_backend:latest
+
+      pinepods_backend_replica_count:
+        description: Number of backend replicas
+        type: int
+        default: 1
+
+      # Network configuration
+      pinepods_backend_port:
+        description: Container port for the backend service
+        type: int
+        default: 5000
+
+      pinepods_backend_service_port:
+        description: Service port for the backend
+        type: int
+        default: 5000
+
+      # Resource configuration
+      pinepods_backend_cpu_request:
+        description: CPU request for backend container
+        type: str
+        default: "100m"
+
+      pinepods_backend_cpu_limit:
+        description: CPU limit for backend container
+        type: str
+        default: "500m"
+
+      pinepods_backend_memory_request:
+        description: Memory request for backend container
+        type: str
+        default: "128Mi"
+
+      pinepods_backend_memory_limit:
+        description: Memory limit for backend container
+        type: str
+        default: "512Mi"
+
+      # API credentials
+      pinepods_backend_api_key:
+        description: Podcast Index API key
+        type: str
+        default: ""
+        required: true
+
+      pinepods_backend_api_secret:
+        description: Podcast Index API secret
+        type: str
+        default: ""
+        required: true
+
+      pinepods_backend_youtube_api_key:
+        description: YouTube Data API v3 key for channel search
+        type: str
+        default: ""
+
+      # Logging
+      pinepods_backend_rust_log:
+        description: Rust logging level
+        type: str
+        default: "info"
+        choices:
+          - "trace"
+          - "debug"
+          - "info"
+          - "warn"
+          - "error"
+
+      # Service exposure (uses global service_type)
+      service_type:
+        description: How to expose the service
+        type: str
+        default: "ingress"
+        choices:
+          - "ingress"
+          - "loadbalancer"
+          - "both"
+          - "clusterip"
+
+      # Ingress configuration
+      pinepods_backend_ingress_host:
+        description: Hostname for ingress
+        type: str
+
+      pinepods_backend_ingress_tls:
+        description: Enable TLS for ingress
+        type: bool
+        default: true
+
+      nginx_ingress_hostname:
+        description: Base hostname for ingress (used to build full hostname)
+        type: str
+        default: "localhost"
+
+      # Storage configuration
+      pinepods_backend_storage_enabled:
+        description: Enable persistent storage for backend
+        type: bool
+        default: false
+
+      pinepods_backend_storage_size:
+        description: Size of persistent storage
+        type: str
+        default: "1Gi"
+
+      pinepods_backend_storage_class:
+        description: Storage class for persistent volumes
+        type: str
+        default: "rook-ceph-block"
+
+      # Health checks
+      pinepods_backend_health_check_enabled:
+        description: Enable health checks
+        type: bool
+        default: true
+
+      pinepods_backend_liveness_probe_path:
+        description: Path for liveness probe
+        type: str
+        default: "/api/stats"
+
+      pinepods_backend_readiness_probe_path:
+        description: Path for readiness probe
+        type: str
+        default: "/api/stats"
+
+      pinepods_backend_probe_initial_delay:
+        description: Initial delay for probes (seconds)
+        type: int
+        default: 30
+
+      pinepods_backend_probe_period:
+        description: Period for probes (seconds)
+        type: int
+        default: 10
+
+      pinepods_backend_probe_timeout:
+        description: Timeout for probes (seconds)
+        type: int
+        default: 5
+
+      pinepods_backend_probe_failure_threshold:
+        description: Failure threshold for probes
+        type: int
+        default: 3
+
+      # Security
+      pinepods_backend_security_context:
+        description: Security context for backend pods
+        type: dict
+
+      # Pod disruption budget
+      pinepods_backend_pdb_enabled:
+        description: Enable Pod Disruption Budget
+        type: bool
+        default: true
+
+      pinepods_backend_pdb_min_available:
+        description: Minimum available pods for PDB
+        type: int
+        default: 1
+
+      # Required from k3s cluster configuration
+      kubeconfig:
+        description: Path to kubeconfig file
+        type: str
+        required: true

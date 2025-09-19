@@ -1,0 +1,299 @@
+---
+# roles/pinepods-backend/tasks/main.yml
+
+- name: Create pinepods-backend namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ pinepods_backend_namespace }}"
+
+- name: Create PVC for Pinepods Backend (if storage enabled)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: pinepods-backend-storage-pvc
+        namespace: "{{ pinepods_backend_namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ pinepods_backend_storage_size }}"
+        storageClassName: "{{ pinepods_backend_storage_class }}"
+  when: pinepods_backend_storage_enabled
+
+- name: Deploy Pinepods Backend (with storage)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pinepods-backend
+        namespace: "{{ pinepods_backend_namespace }}"
+        labels:
+          app: pinepods-backend
+      spec:
+        replicas: "{{ pinepods_backend_replica_count }}"
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 1
+        selector:
+          matchLabels:
+            app: pinepods-backend
+        template:
+          metadata:
+            labels:
+              app: pinepods-backend
+          spec:
+            securityContext: "{{ pinepods_backend_security_context }}"
+            terminationGracePeriodSeconds: 30
+            containers:
+              - name: pinepods-backend
+                image: "{{ pinepods_backend_image }}"
+                imagePullPolicy: Always
+                ports:
+                  - containerPort: "{{ pinepods_backend_port }}"
+                    name: http
+                    protocol: TCP
+                env: "{{ pinepods_backend_env_vars }}"
+                resources:
+                  requests:
+                    cpu: "{{ pinepods_backend_cpu_request }}"
+                    memory: "{{ pinepods_backend_memory_request }}"
+                  limits:
+                    cpu: "{{ pinepods_backend_cpu_limit }}"
+                    memory: "{{ pinepods_backend_memory_limit }}"
+                livenessProbe:
+                  httpGet:
+                    path: "{{ pinepods_backend_liveness_probe_path }}"
+                    port: "{{ pinepods_backend_port }}"
+                  initialDelaySeconds: "{{ pinepods_backend_probe_initial_delay }}"
+                  periodSeconds: "{{ pinepods_backend_probe_period }}"
+                  timeoutSeconds: "{{ pinepods_backend_probe_timeout }}"
+                  failureThreshold: "{{ pinepods_backend_probe_failure_threshold }}"
+                readinessProbe:
+                  httpGet:
+                    path: "{{ pinepods_backend_readiness_probe_path }}"
+                    port: "{{ pinepods_backend_port }}"
+                  initialDelaySeconds: 10
+                  periodSeconds: "{{ pinepods_backend_probe_period }}"
+                  timeoutSeconds: "{{ pinepods_backend_probe_timeout }}"
+                  failureThreshold: "{{ pinepods_backend_probe_failure_threshold }}"
+                volumeMounts:
+                  - name: storage
+                    mountPath: /app/data
+                  - name: tmp
+                    mountPath: /tmp
+            volumes:
+              - name: storage
+                persistentVolumeClaim:
+                  claimName: pinepods-backend-storage-pvc
+              - name: tmp
+                emptyDir: {}
+  when: pinepods_backend_storage_enabled
+
+- name: Deploy Pinepods Backend (without storage)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pinepods-backend
+        namespace: "{{ pinepods_backend_namespace }}"
+        labels:
+          app: pinepods-backend
+      spec:
+        replicas: "{{ pinepods_backend_replica_count }}"
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 1
+        selector:
+          matchLabels:
+            app: pinepods-backend
+        template:
+          metadata:
+            labels:
+              app: pinepods-backend
+          spec:
+            securityContext: "{{ pinepods_backend_security_context }}"
+            terminationGracePeriodSeconds: 30
+            containers:
+              - name: pinepods-backend
+                image: "{{ pinepods_backend_image }}"
+                imagePullPolicy: Always
+                ports:
+                  - containerPort: "{{ pinepods_backend_port }}"
+                    name: http
+                    protocol: TCP
+                env: "{{ pinepods_backend_env_vars }}"
+                resources:
+                  requests:
+                    cpu: "{{ pinepods_backend_cpu_request }}"
+                    memory: "{{ pinepods_backend_memory_request }}"
+                  limits:
+                    cpu: "{{ pinepods_backend_cpu_limit }}"
+                    memory: "{{ pinepods_backend_memory_limit }}"
+                livenessProbe:
+                  httpGet:
+                    path: "{{ pinepods_backend_liveness_probe_path }}"
+                    port: "{{ pinepods_backend_port }}"
+                  initialDelaySeconds: "{{ pinepods_backend_probe_initial_delay }}"
+                  periodSeconds: "{{ pinepods_backend_probe_period }}"
+                  timeoutSeconds: "{{ pinepods_backend_probe_timeout }}"
+                  failureThreshold: "{{ pinepods_backend_probe_failure_threshold }}"
+                readinessProbe:
+                  httpGet:
+                    path: "{{ pinepods_backend_readiness_probe_path }}"
+                    port: "{{ pinepods_backend_port }}"
+                  initialDelaySeconds: 10
+                  periodSeconds: "{{ pinepods_backend_probe_period }}"
+                  timeoutSeconds: "{{ pinepods_backend_probe_timeout }}"
+                  failureThreshold: "{{ pinepods_backend_probe_failure_threshold }}"
+                volumeMounts:
+                  - name: tmp
+                    mountPath: /tmp
+            volumes:
+              - name: tmp
+                emptyDir: {}
+  when: not pinepods_backend_storage_enabled
+
+- name: Create PodDisruptionBudget for Pinepods Backend
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: pinepods-backend-pdb
+        namespace: "{{ pinepods_backend_namespace }}"
+      spec:
+        minAvailable: "{{ pinepods_backend_pdb_min_available }}"
+        selector:
+          matchLabels:
+            app: pinepods-backend
+  when: pinepods_backend_pdb_enabled
+
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create Pinepods Backend ClusterIP Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: pinepods-backend
+        namespace: "{{ pinepods_backend_namespace }}"
+        labels:
+          app: pinepods-backend
+      spec:
+        type: ClusterIP
+        selector:
+          app: pinepods-backend
+        ports:
+          - name: http
+            port: "{{ pinepods_backend_service_port }}"
+            targetPort: "{{ pinepods_backend_port }}"
+            protocol: TCP
+  when: service_type in ['ingress', 'both', 'clusterip']
+
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Pinepods Backend LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: pinepods-backend-lb
+        namespace: "{{ pinepods_backend_namespace }}"
+        labels:
+          app: pinepods-backend
+      spec:
+        type: LoadBalancer
+        selector:
+          app: pinepods-backend
+        ports:
+          - name: http
+            port: "{{ pinepods_backend_service_port }}"
+            targetPort: "{{ pinepods_backend_port }}"
+            protocol: TCP
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
+- name: Create Pinepods Backend Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: pinepods-backend-ingress
+        namespace: "{{ pinepods_backend_namespace }}"
+        labels:
+          app: pinepods-backend
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+          traefik.ingress.kubernetes.io/router.tls: "{{ pinepods_backend_ingress_tls | string | lower }}"
+          traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          traefik.ingress.kubernetes.io/router.middlewares: "{{ pinepods_backend_namespace }}-cors@kubernetescrd"
+      spec:
+        rules:
+          - host: "{{ pinepods_backend_ingress_host }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: pinepods-backend
+                      port:
+                        number: "{{ pinepods_backend_service_port }}"
+  when: service_type in ['ingress', 'both']
+
+# Create CORS middleware for API
+- name: Create CORS middleware for Pinepods Backend
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: traefik.containo.us/v1alpha1
+      kind: Middleware
+      metadata:
+        name: cors
+        namespace: "{{ pinepods_backend_namespace }}"
+      spec:
+        headers:
+          accessControlAllowOriginList:
+            - "*"
+          accessControlAllowMethods:
+            - "GET"
+            - "POST"
+            - "PUT"
+            - "DELETE"
+            - "OPTIONS"
+          accessControlAllowHeaders:
+            - "*"
+          accessControlExposeHeaders:
+            - "*"
+          accessControlMaxAge: 3600
+  when: service_type in ['ingress', 'both']

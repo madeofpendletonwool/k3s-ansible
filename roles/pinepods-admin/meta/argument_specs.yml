@@ -1,0 +1,120 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy Pinepods Admin application
+    description: |
+      Deploys Pinepods Admin form management application to Kubernetes cluster
+      with persistent storage and configurable service exposure.
+    options:
+      kubeconfig:
+        description: Path to kubeconfig file
+        required: true
+        type: str
+      
+      service_type:
+        description: Service exposure type
+        type: str
+        default: loadbalancer
+        choices:
+          - ingress
+          - loadbalancer
+          - both
+          - clusterip
+      
+      nginx_ingress_hostname:
+        description: Base hostname for ingress
+        required: true
+        type: str
+      
+      pinepods_admin_namespace:
+        description: Kubernetes namespace for Pinepods Admin
+        type: str
+        default: pinepods-admin
+      
+      pinepods_admin_image:
+        description: Container image for Pinepods Admin
+        type: str
+        default: madeofpendletonwool/pinepods-admin:latest
+      
+      pinepods_admin_port:
+        description: Application port
+        type: int
+        default: 8080
+      
+      pinepods_admin_hostname:
+        description: Hostname for ingress
+        type: str
+      
+      pinepods_admin_username:
+        description: Admin username
+        type: str
+        default: admin
+      
+      pinepods_admin_password:
+        description: Admin password
+        type: str
+        required: true
+      
+      pinepods_admin_feedback_email:
+        description: Email for feedback notifications
+        type: str
+        required: true
+      
+      pinepods_admin_ntfy_enabled:
+        description: Enable NTFY notifications
+        type: bool
+        default: true
+      
+      pinepods_admin_ntfy_url:
+        description: NTFY server URL
+        type: str
+      
+      pinepods_admin_ntfy_topic:
+        description: NTFY topic for notifications
+        type: str
+        default: pinepods-admin
+      
+      pinepods_admin_smtp_host:
+        description: SMTP server hostname
+        type: str
+      
+      pinepods_admin_smtp_port:
+        description: SMTP server port
+        type: int
+        default: 587
+      
+      pinepods_admin_smtp_username:
+        description: SMTP username
+        type: str
+      
+      pinepods_admin_smtp_password:
+        description: SMTP password
+        type: str
+      
+      pinepods_admin_smtp_from:
+        description: SMTP from address
+        type: str
+      
+      pinepods_admin_google_service_account:
+        description: Google service account JSON
+        type: str
+      
+      pinepods_admin_google_package_name:
+        description: Google Play package name
+        type: str
+        default: com.gooseberrydevelopment.pinepods
+      
+      pinepods_admin_cors_origins:
+        description: CORS allowed origins
+        type: str
+        default: "https://docs.pinepods.online,https://pinepods.online"
+      
+      pinepods_admin_data_storage_size:
+        description: Size of data storage PVC
+        type: str
+        default: 2Gi
+      
+      pinepods_admin_config_storage_size:
+        description: Size of config storage PVC
+        type: str
+        default: 1Gi

@@ -64,7 +64,8 @@
                 persistentVolumeClaim:
                   claimName: uptime-kuma-data-pvc
 
-- name: Create uptime-kuma service
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Create uptime-kuma ClusterIP service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -75,13 +76,37 @@
         name: uptime-kuma
         namespace: uptime-kuma
       spec:
+        type: ClusterIP
         selector:
           app: uptime-kuma
         ports:
           - protocol: TCP
             port: 3001
             targetPort: 3001
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create uptime-kuma LoadBalancer service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: uptime-kuma-lb
+        namespace: uptime-kuma
+      spec:
+        type: LoadBalancer
+        selector:
+          app: uptime-kuma
+        ports:
+          - protocol: TCP
+            port: 3001
+            targetPort: 3001
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Create uptime-kuma ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -108,3 +133,4 @@
                       name: uptime-kuma
                       port:
                         number: 3001
+  when: service_type in ['ingress', 'both']

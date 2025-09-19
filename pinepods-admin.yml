@@ -1,0 +1,8 @@
+---
+- name: Install Pinepods Admin
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: pinepods-admin
+      become: true

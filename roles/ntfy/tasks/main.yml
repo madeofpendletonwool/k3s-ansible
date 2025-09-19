@@ -98,8 +98,8 @@
           matchLabels:
             app: ntfy
 
-# Service remains the same
-- name: Deploy ntfy Service
+# Deploy ClusterIP Service (for ingress and both modes)
+- name: Deploy ntfy ClusterIP Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -110,6 +110,7 @@
         name: ntfy
         namespace: "{{ ntfy_namespace }}"
       spec:
+        type: ClusterIP
         selector:
           app: ntfy
         ports:
@@ -117,8 +118,31 @@
             targetPort: 80
             name: http
   delegate_to: localhost
+  when: service_type in ['ingress', 'both', 'clusterip']
 
-# Ingress remains the same
+# Deploy LoadBalancer Service (for loadbalancer and both modes)
+- name: Deploy ntfy LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ntfy-lb
+        namespace: "{{ ntfy_namespace }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          app: ntfy
+        ports:
+          - port: 80
+            targetPort: 80
+            name: http
+  delegate_to: localhost
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Ingress (for ingress and both modes)
 - name: Deploy ntfy Ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -146,3 +170,4 @@
                       port:
                         number: 80
   delegate_to: localhost
+  when: service_type in ['ingress', 'both']

@@ -106,7 +106,8 @@
           matchLabels:
             app: navidrome
 
-- name: Create Navidrome Service
+# Deploy Navidrome ClusterIP Service (for ingress and both modes)
+- name: Create Navidrome ClusterIP Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -117,13 +118,37 @@
         name: navidrome
         namespace: navidrome
       spec:
+        type: ClusterIP
         selector:
           app: navidrome
         ports:
           - protocol: TCP
             port: 4533
             targetPort: 4533
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy Navidrome LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Navidrome LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: navidrome-lb
+        namespace: navidrome
+      spec:
+        type: LoadBalancer
+        selector:
+          app: navidrome
+        ports:
+          - protocol: TCP
+            port: 4533
+            targetPort: 4533
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Navidrome Ingress (for ingress and both modes)
 - name: Create Navidrome Ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -150,6 +175,7 @@
                       name: navidrome
                       port:
                         number: 4533
+  when: service_type in ['ingress', 'both']
 
 
 - name: Deploy Bonob
@@ -201,7 +227,8 @@
                   - name: BNB_SUBSONIC_URL
                     value: "http://navidrome:4533"  # Internal service reference
 
-- name: Create Bonob Service
+# Deploy Bonob ClusterIP Service (for ingress and both modes)
+- name: Create Bonob ClusterIP Service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -212,13 +239,37 @@
         name: bonob
         namespace: navidrome
       spec:
+        type: ClusterIP
         selector:
           app: bonob
         ports:
           - protocol: TCP
             port: 4534
             targetPort: 4534
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy Bonob LoadBalancer Service (for loadbalancer and both modes)
+- name: Create Bonob LoadBalancer Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: bonob-lb
+        namespace: navidrome
+      spec:
+        type: LoadBalancer
+        selector:
+          app: bonob
+        ports:
+          - protocol: TCP
+            port: 4534
+            targetPort: 4534
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy Bonob Ingress (for ingress and both modes)
 - name: Create Bonob Ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -243,3 +294,4 @@
                       name: bonob
                       port:
                         number: 4534
+  when: service_type in ['ingress', 'both']

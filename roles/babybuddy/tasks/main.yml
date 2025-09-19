@@ -83,7 +83,8 @@
                 persistentVolumeClaim:
                   claimName: babybuddy-config-pvc
 
-- name: Create babybuddy service
+# Deploy BabyBuddy ClusterIP Service (for ingress and both modes)
+- name: Create babybuddy ClusterIP service
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
     state: present
@@ -94,13 +95,37 @@
         name: babybuddy
         namespace: babybuddy
       spec:
+        type: ClusterIP
         selector:
           app: babybuddy
         ports:
           - protocol: TCP
             port: 8000
             targetPort: 8000
+  when: service_type in ['ingress', 'both', 'clusterip']
 
+# Deploy BabyBuddy LoadBalancer Service (for loadbalancer and both modes)
+- name: Create babybuddy LoadBalancer service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: babybuddy-lb
+        namespace: babybuddy
+      spec:
+        type: LoadBalancer
+        selector:
+          app: babybuddy
+        ports:
+          - protocol: TCP
+            port: 8000
+            targetPort: 8000
+  when: service_type in ['loadbalancer', 'both']
+
+# Deploy BabyBuddy Ingress (for ingress and both modes)
 - name: Create babybuddy ingress
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig }}"
@@ -127,3 +152,4 @@
                       name: babybuddy
                       port:
                         number: 8000
+  when: service_type in ['ingress', 'both']
